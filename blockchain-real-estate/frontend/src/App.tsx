@@ -1,122 +1,270 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { BrowserProvider, Contract, type Eip1193Provider } from "ethers";
+import { useCallback, useEffect, useState } from "react";
 
-function App() {
-  const [count, setCount] = useState(0)
+import "./App.css";
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+import { CONTRACT_ADDRESSES, HARDHAT_CHAIN_ID } from "./blockchain/contracts";
+import { propertyRegistryAbi } from "./blockchain/propertyRegistryAbi";
 
-      <div className="ticks"></div>
+interface MetaMaskProvider extends Eip1193Provider {
+	on(
+		eventName: "accountsChanged",
+		listener: (accounts: string[]) => void,
+	): void;
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+	on(eventName: "chainChanged", listener: (chainId: string) => void): void;
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+	removeListener(
+		eventName: "accountsChanged",
+		listener: (accounts: string[]) => void,
+	): void;
+
+	removeListener(
+		eventName: "chainChanged",
+		listener: (chainId: string) => void,
+	): void;
 }
 
-export default App
+declare global {
+	interface Window {
+		ethereum?: MetaMaskProvider;
+	}
+}
+
+function shortenAddress(address: string): string {
+	return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error
+		? error.message
+		: "Dogodila se neočekivana pogreška.";
+}
+
+export default function App() {
+	const [account, setAccount] = useState("");
+	const [networkName, setNetworkName] = useState("");
+	const [roles, setRoles] = useState<string[]>([]);
+	const [error, setError] = useState("");
+	const [isConnecting, setIsConnecting] = useState(false);
+
+	const clearWalletData = useCallback((): void => {
+		setAccount("");
+		setNetworkName("");
+		setRoles([]);
+	}, []);
+
+	const loadAccountData = useCallback(
+		async (
+			selectedAccount: string,
+			provider: BrowserProvider,
+		): Promise<void> => {
+			const network = await provider.getNetwork();
+
+			if (network.chainId !== HARDHAT_CHAIN_ID) {
+				clearWalletData();
+
+				setNetworkName(`Chain ID: ${network.chainId.toString()}`);
+
+				throw new Error("Prebaci MetaMask na mrežu Hardhat local.");
+			}
+
+			const propertyRegistry = new Contract(
+				CONTRACT_ADDRESSES.propertyRegistry,
+				propertyRegistryAbi,
+				provider,
+			);
+
+			const [adminRole, verifierRole, transferRole] = await Promise.all([
+				propertyRegistry.DEFAULT_ADMIN_ROLE(),
+				propertyRegistry.VERIFIER_ROLE(),
+				propertyRegistry.TRANSFER_ROLE(),
+			]);
+
+			const [hasAdminRole, hasVerifierRole, hasTransferRole] =
+				await Promise.all([
+					propertyRegistry.hasRole(adminRole, selectedAccount),
+					propertyRegistry.hasRole(verifierRole, selectedAccount),
+					propertyRegistry.hasRole(transferRole, selectedAccount),
+				]);
+
+			const detectedRoles: string[] = [];
+
+			if (hasAdminRole) {
+				detectedRoles.push("Administrator");
+			}
+
+			if (hasVerifierRole) {
+				detectedRoles.push("Verifikator");
+			}
+
+			if (hasTransferRole) {
+				detectedRoles.push("Prijenos vlasništva");
+			}
+
+			if (detectedRoles.length === 0) {
+				detectedRoles.push("Korisnik");
+			}
+
+			setAccount(selectedAccount);
+			setNetworkName("Hardhat local");
+			setRoles(detectedRoles);
+		},
+		[clearWalletData],
+	);
+
+	async function connectWallet(): Promise<void> {
+		setError("");
+		setIsConnecting(true);
+
+		try {
+			if (!window.ethereum) {
+				throw new Error("MetaMask nije pronađen u pregledniku.");
+			}
+
+			const provider = new BrowserProvider(window.ethereum);
+
+			await provider.send("eth_requestAccounts", []);
+
+			const signer = await provider.getSigner();
+			const selectedAccount = await signer.getAddress();
+
+			await loadAccountData(selectedAccount, provider);
+		} catch (caughtError) {
+			setError(getErrorMessage(caughtError));
+		} finally {
+			setIsConnecting(false);
+		}
+	}
+
+	useEffect(() => {
+		const detectedProvider = window.ethereum;
+
+		if (!detectedProvider) {
+			return;
+		}
+
+		const ethereumProvider: MetaMaskProvider = detectedProvider;
+
+		async function handleAccountsChanged(accounts: string[]): Promise<void> {
+			setError("");
+
+			const selectedAccount = accounts[0];
+
+			if (!selectedAccount) {
+				clearWalletData();
+				return;
+			}
+
+			try {
+				const provider = new BrowserProvider(ethereumProvider);
+
+				await loadAccountData(selectedAccount, provider);
+			} catch (caughtError) {
+				setError(getErrorMessage(caughtError));
+			}
+		}
+
+		async function handleChainChanged(): Promise<void> {
+			setError("");
+			clearWalletData();
+
+			try {
+				const accounts = (await ethereumProvider.request({
+					method: "eth_accounts",
+				})) as string[];
+
+				const selectedAccount = accounts[0];
+
+				if (!selectedAccount) {
+					return;
+				}
+
+				const provider = new BrowserProvider(ethereumProvider);
+
+				await loadAccountData(selectedAccount, provider);
+			} catch (caughtError) {
+				setError(getErrorMessage(caughtError));
+			}
+		}
+
+		async function loadPreviouslyConnectedWallet(): Promise<void> {
+			try {
+				const accounts = (await ethereumProvider.request({
+					method: "eth_accounts",
+				})) as string[];
+
+				const selectedAccount = accounts[0];
+
+				if (!selectedAccount) {
+					return;
+				}
+
+				const provider = new BrowserProvider(ethereumProvider);
+
+				await loadAccountData(selectedAccount, provider);
+			} catch (caughtError) {
+				setError(getErrorMessage(caughtError));
+			}
+		}
+
+		ethereumProvider.on("accountsChanged", handleAccountsChanged);
+
+		ethereumProvider.on("chainChanged", handleChainChanged);
+
+		void loadPreviouslyConnectedWallet();
+
+		return () => {
+			ethereumProvider.removeListener("accountsChanged", handleAccountsChanged);
+
+			ethereumProvider.removeListener("chainChanged", handleChainChanged);
+		};
+	}, [clearWalletData, loadAccountData]);
+
+	return (
+		<main className="app">
+			<section className="wallet-card">
+				<p className="eyebrow">Blockchain kupoprodaja nekretnina</p>
+
+				<h1>Povezivanje digitalnog novčanika</h1>
+
+				<p className="description">
+					Poveži MetaMask kako bi aplikacija mogla komunicirati s lokalnim
+					pametnim ugovorima.
+				</p>
+
+				<button type="button" onClick={connectWallet} disabled={isConnecting}>
+					{isConnecting
+						? "Povezivanje..."
+						: account
+							? "Osvježi podatke računa"
+							: "Poveži MetaMask"}
+				</button>
+
+				{account && (
+					<div className="connection-details">
+						<p>
+							<span>Račun</span>
+
+							<strong>{shortenAddress(account)}</strong>
+						</p>
+
+						<p>
+							<span>Mreža</span>
+							<strong>{networkName}</strong>
+						</p>
+
+						<p>
+							<span>Uloge</span>
+							<strong>{roles.join(", ")}</strong>
+						</p>
+
+						<p className="success">MetaMask je uspješno povezan.</p>
+					</div>
+				)}
+
+				{error && <p className="error">{error}</p>}
+			</section>
+		</main>
+	);
+}
