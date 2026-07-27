@@ -2,15 +2,19 @@ import { BrowserProvider, Contract, type Eip1193Provider } from "ethers";
 import { useCallback, useEffect, useState } from "react";
 
 import "./App.css";
+import "./styles/shared.css";
 
 import { CONTRACT_ADDRESSES, HARDHAT_CHAIN_ID } from "./blockchain/contracts";
 import { propertyRegistryAbi } from "./blockchain/propertyRegistryAbi";
-import CreateSaleForm from "./components/CreateSaleForm";
-import MintMockEURForm from "./components/MintMockEURForm";
-import PurchaseSalePanel from "./components/PurchaseSalePanel";
-import RegisterPropertyForm from "./components/RegisterPropertyForm";
-import TransactionHistoryPanel from "./components/TransactionHistoryPanel";
-import VerifyPropertiesPanel from "./components/VerifyPropertiesPanel";
+import AccountBalancePanel from "./components/AccountBalancePanel/AccountBalancePanel";
+import ActiveSalesManagementPanel from "./components/ActiveSalesManagementPanel/ActiveSalesManagementPanel";
+import CreateSaleForm from "./components/CreateSaleForm/CreateSaleForm";
+import MintMockEURForm from "./components/MintMockEURForm/MintMockEURForm";
+import PropertyPortfolioPanel from "./components/PropertyPortfolioPanel/PropertyPortfolioPanel";
+import PurchaseSalePanel from "./components/PurchaseSalePanel/PurchaseSalePanel";
+import RegisterPropertyForm from "./components/RegisterPropertyForm/RegisterPropertyForm";
+import TransactionHistoryPanel from "./components/TransactionHistoryPanel/TransactionHistoryPanel";
+import VerifyPropertiesPanel from "./components/VerifyPropertiesPanel/VerifyPropertiesPanel";
 
 interface MetaMaskProvider extends Eip1193Provider {
 	on(
@@ -298,6 +302,17 @@ export default function App() {
 				{error && <p className="error">{error}</p>}
 			</section>
 
+			{account && (
+				<AccountBalancePanel
+					account={account}
+					applicationProfile={applicationProfile}
+				/>
+			)}
+
+			{account && (
+				<PropertyPortfolioPanel account={account} showAll={isAdmin} />
+			)}
+
 			{account && (isAdmin || isSeller) && (
 				<RegisterPropertyForm account={account} />
 			)}
@@ -305,6 +320,10 @@ export default function App() {
 			{account && isAdmin && <VerifyPropertiesPanel account={account} />}
 
 			{account && (isAdmin || isSeller) && <CreateSaleForm account={account} />}
+
+			{account && (isAdmin || isSeller) && (
+				<ActiveSalesManagementPanel account={account} showAll={isAdmin} />
+			)}
 
 			{account && isAdmin && <MintMockEURForm account={account} />}
 

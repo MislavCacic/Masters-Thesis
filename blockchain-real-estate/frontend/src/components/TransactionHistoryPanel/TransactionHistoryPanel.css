@@ -1,0 +1,92 @@
+.history-card {
+	width: min(100%, 960px);
+	padding: 36px;
+	border: 1px solid #334155;
+	border-radius: 20px;
+	background: #1e293b;
+	box-shadow: 0 24px 60px rgb(0 0 0 / 25%);
+}
+
+.history-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 24px;
+}
+
+.history-header h2 {
+	margin: 0;
+	font-size: 32px;
+}
+
+.history-header p:last-child {
+	max-width: 640px;
+	margin: 14px 0 0;
+	color: #cbd5e1;
+	line-height: 1.6;
+}
+
+.history-details {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ownership-confirmation,
+.ownership-warning,
+.ownership-cancellation {
+	display: grid;
+	gap: 7px;
+	margin-top: 20px;
+	padding: 18px;
+	border-radius: 12px;
+}
+
+.ownership-confirmation {
+	border: 1px solid #22c55e;
+	background: rgb(20 83 45 / 35%);
+	color: #bbf7d0;
+}
+
+.ownership-warning {
+	border: 1px solid #dc2626;
+	background: rgb(127 29 29 / 30%);
+	color: #fecaca;
+}
+
+.ownership-cancellation {
+	border: 1px solid #f59e0b;
+	background: rgb(120 53 15 / 25%);
+	color: #fde68a;
+}
+
+.ownership-confirmation span,
+.ownership-warning span,
+.ownership-cancellation span {
+	font-size: 13px;
+	opacity: 0.85;
+}
+
+.ownership-confirmation strong,
+.ownership-warning strong,
+.ownership-cancellation strong {
+	font-size: 19px;
+}
+
+.ownership-confirmation p,
+.ownership-warning p,
+.ownership-cancellation p {
+	margin: 0;
+}
+
+@media (max-width: 760px) {
+	.history-card {
+		padding: 26px 20px;
+	}
+
+	.history-header {
+		flex-direction: column;
+	}
+
+	.history-details {
+		grid-template-columns: 1fr;
+	}
+}

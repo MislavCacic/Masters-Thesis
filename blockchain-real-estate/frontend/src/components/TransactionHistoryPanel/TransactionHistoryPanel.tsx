@@ -1,22 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { BrowserProvider, Contract, formatUnits } from "ethers";
+import { BrowserProvider, Contract, formatUnits, ZeroAddress } from "ethers";
 
-import { CONTRACT_ADDRESSES } from "../blockchain/contracts";
-import { propertyRegistryAbi } from "../blockchain/propertyRegistryAbi";
-import { realEstateEscrowAbi } from "../blockchain/realEstateEscrowAbi";
+import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
+import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
+import { realEstateEscrowAbi } from "../../blockchain/realEstateEscrowAbi";
+
+import "./TransactionHistoryPanel.css";
 
 interface TransactionHistoryPanelProps {
 	account: string;
 	showAll: boolean;
 }
 
-interface CompletedSale {
+interface HistoricalSale {
 	id: bigint;
 	propertyId: bigint;
 	seller: string;
 	buyer: string;
 	price: bigint;
+	status: number;
 	propertyAddress: string;
 	cadastralMunicipality: string;
 	parcelNumber: string;
@@ -48,19 +51,18 @@ function getErrorMessage(error: unknown): string {
 		}
 	}
 
-	return "Dohvat završenih kupoprodaja nije uspio.";
+	return "Dohvat povijesti prodaja nije uspio.";
 }
 
 export default function TransactionHistoryPanel({
 	account,
 	showAll,
 }: TransactionHistoryPanelProps) {
-	const [completedSales, setCompletedSales] = useState<CompletedSale[]>([]);
-
+	const [sales, setSales] = useState<HistoricalSale[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 	const [errorMessage, setErrorMessage] = useState("");
 
-	const loadCompletedSales = useCallback(async (): Promise<void> => {
+	const loadSales = useCallback(async (): Promise<void> => {
 		setIsLoading(true);
 		setErrorMessage("");
 
@@ -85,7 +87,7 @@ export default function TransactionHistoryPanel({
 
 			const saleCount = (await realEstateEscrow.getSaleCount()) as bigint;
 
-			const loadedSales: CompletedSale[] = [];
+			const loadedSales: HistoricalSale[] = [];
 
 			for (let saleId = 1n; saleId <= saleCount; saleId++) {
 				const sale = await realEstateEscrow.getSale(saleId);
@@ -96,6 +98,7 @@ export default function TransactionHistoryPanel({
 				const buyer = sale.buyer as string;
 
 				const isCompleted = status === 2;
+				const isCancelled = status === 3;
 
 				const belongsToConnectedAccount =
 					seller.toLowerCase() === account.toLowerCase() ||
@@ -103,7 +106,7 @@ export default function TransactionHistoryPanel({
 
 				if (
 					!exists ||
-					!isCompleted ||
+					(!isCompleted && !isCancelled) ||
 					(!showAll && !belongsToConnectedAccount)
 				) {
 					continue;
@@ -119,6 +122,7 @@ export default function TransactionHistoryPanel({
 					seller,
 					buyer,
 					price: sale.price as bigint,
+					status,
 
 					propertyAddress: property.propertyAddress as string,
 
@@ -130,9 +134,9 @@ export default function TransactionHistoryPanel({
 				});
 			}
 
-			setCompletedSales(loadedSales);
+			setSales(loadedSales);
 		} catch (error) {
-			setCompletedSales([]);
+			setSales([]);
 			setErrorMessage(getErrorMessage(error));
 		} finally {
 			setIsLoading(false);
@@ -140,8 +144,8 @@ export default function TransactionHistoryPanel({
 	}, [account, showAll]);
 
 	useEffect(() => {
-		void loadCompletedSales();
-	}, [loadCompletedSales]);
+		void loadSales();
+	}, [loadSales]);
 
 	return (
 		<section className="history-card">
@@ -149,40 +153,48 @@ export default function TransactionHistoryPanel({
 				<div>
 					<p className="eyebrow">Evidencija kupoprodaja</p>
 
-					<h2>Završene transakcije</h2>
+					<h2>Povijest prodaja</h2>
 
 					<p>
-						Prikaz završenih kupoprodaja i trenutačnog digitalnog vlasnika
-						nekretnine.
+						{showAll
+							? "Pregled svih završenih i otkazanih prodaja u blockchain sustavu."
+							: "Pregled završenih i otkazanih prodaja povezanog računa."}
 					</p>
 				</div>
 
 				<button
 					type="button"
 					className="secondary-button"
-					onClick={() => void loadCompletedSales()}
+					onClick={() => void loadSales()}
 					disabled={isLoading}
 				>
-					{isLoading ? "Učitavanje..." : "Osvježi transakcije"}
+					{isLoading ? "Učitavanje..." : "Osvježi povijest"}
 				</button>
 			</div>
 
-			{isLoading && completedSales.length === 0 && (
-				<p className="transaction-status">
-					Učitavaju se završene transakcije...
-				</p>
+			{isLoading && sales.length === 0 && (
+				<p className="transaction-status">Učitava se povijest prodaja...</p>
 			)}
 
-			{!isLoading && completedSales.length === 0 && (
+			{!isLoading && sales.length === 0 && (
 				<p className="empty-state">
-					Za povezani račun nema završenih kupoprodaja.
+					Za povezani račun nema završenih ni otkazanih prodaja.
 				</p>
 			)}
 
 			<div className="property-list">
-				{completedSales.map((sale) => {
+				{sales.map((sale) => {
+					const isCompleted = sale.status === 2;
+
 					const ownershipTransferred =
 						sale.currentDigitalOwner.toLowerCase() === sale.buyer.toLowerCase();
+
+					const ownershipRetainedBySeller =
+						sale.currentDigitalOwner.toLowerCase() ===
+						sale.seller.toLowerCase();
+
+					const hasBuyer =
+						sale.buyer.toLowerCase() !== ZeroAddress.toLowerCase();
 
 					return (
 						<article className="property-item" key={sale.id.toString()}>
@@ -195,7 +207,15 @@ export default function TransactionHistoryPanel({
 									<h3>{sale.propertyAddress}</h3>
 								</div>
 
-								<span className="status-badge status-verified">Completed</span>
+								<span
+									className={
+										isCompleted
+											? "status-badge status-verified"
+											: "status-badge status-rejected"
+									}
+								>
+									{isCompleted ? "Completed" : "Cancelled"}
+								</span>
 							</div>
 
 							<dl className="property-details history-details">
@@ -226,29 +246,54 @@ export default function TransactionHistoryPanel({
 
 								<div>
 									<dt>Kupac</dt>
-									<dd title={sale.buyer}>{shortenAddress(sale.buyer)}</dd>
+
+									<dd title={hasBuyer ? sale.buyer : undefined}>
+										{hasBuyer ? shortenAddress(sale.buyer) : "Nije dodijeljen"}
+									</dd>
 								</div>
 							</dl>
 
-							<div
-								className={
-									ownershipTransferred
-										? "ownership-confirmation"
-										: "ownership-warning"
-								}
-							>
-								<span>Trenutačni digitalni vlasnik</span>
+							{isCompleted ? (
+								<div
+									className={
+										ownershipTransferred
+											? "ownership-confirmation"
+											: "ownership-warning"
+									}
+								>
+									<span>Trenutačni digitalni vlasnik</span>
 
-								<strong title={sale.currentDigitalOwner}>
-									{shortenAddress(sale.currentDigitalOwner)}
-								</strong>
+									<strong title={sale.currentDigitalOwner}>
+										{shortenAddress(sale.currentDigitalOwner)}
+									</strong>
 
-								<p>
-									{ownershipTransferred
-										? "Digitalno vlasništvo uspješno je preneseno na kupca."
-										: "Digitalni vlasnik ne odgovara evidentiranom kupcu."}
-								</p>
-							</div>
+									<p>
+										{ownershipTransferred
+											? "Digitalno vlasništvo uspješno je preneseno na kupca."
+											: "Digitalni vlasnik ne odgovara evidentiranom kupcu."}
+									</p>
+								</div>
+							) : (
+								<div
+									className={
+										ownershipRetainedBySeller
+											? "ownership-cancellation"
+											: "ownership-warning"
+									}
+								>
+									<span>Trenutačni digitalni vlasnik</span>
+
+									<strong title={sale.currentDigitalOwner}>
+										{shortenAddress(sale.currentDigitalOwner)}
+									</strong>
+
+									<p>
+										{ownershipRetainedBySeller
+											? "Prodaja je otkazana. Digitalno vlasništvo ostalo je prodavatelju."
+											: "Nakon otkazivanja vlasništvo ne odgovara evidentiranom prodavatelju."}
+									</p>
+								</div>
+							)}
 						</article>
 					);
 				})}

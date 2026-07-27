@@ -1,8 +1,10 @@
 import { BrowserProvider, Contract } from "ethers";
 import { useCallback, useEffect, useState } from "react";
 
-import { CONTRACT_ADDRESSES } from "../blockchain/contracts";
-import { propertyRegistryAbi } from "../blockchain/propertyRegistryAbi";
+import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
+import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
+
+import "./VerifyPropertiesPanel.css";
 
 interface VerifyPropertiesPanelProps {
 	account: string;

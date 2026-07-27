@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { BrowserProvider, Contract, parseUnits } from "ethers";
 
-import { CONTRACT_ADDRESSES } from "../blockchain/contracts";
-import { propertyRegistryAbi } from "../blockchain/propertyRegistryAbi";
-import { realEstateEscrowAbi } from "../blockchain/realEstateEscrowAbi";
+import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
+import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
+import { realEstateEscrowAbi } from "../../blockchain/realEstateEscrowAbi";
+
+import "./CreateSaleForm.css";
 
 interface CreateSaleFormProps {
 	account: string;
@@ -165,6 +167,21 @@ export default function CreateSaleForm({ account }: CreateSaleFormProps) {
 		void loadEligibleProperties();
 	}, [account, loadEligibleProperties]);
 
+	useEffect(() => {
+		if (!successMessage) {
+			return;
+		}
+
+		const messageTimer = window.setTimeout(() => {
+			setSuccessMessage("");
+			setTransactionHash("");
+		}, 6000);
+
+		return () => {
+			window.clearTimeout(messageTimer);
+		};
+	}, [successMessage]);
+
 	async function handleSubmit(
 		event: FormEvent<HTMLFormElement>,
 	): Promise<void> {
@@ -275,7 +292,14 @@ export default function CreateSaleForm({ account }: CreateSaleFormProps) {
 				<button
 					type="button"
 					className="secondary-button"
-					onClick={() => void loadEligibleProperties()}
+					onClick={() => {
+						setStatusMessage("");
+						setSuccessMessage("");
+						setErrorMessage("");
+						setTransactionHash("");
+
+						void loadEligibleProperties();
+					}}
 					disabled={isLoading || isSubmitting}
 				>
 					{isLoading ? "Učitavanje..." : "Osvježi nekretnine"}

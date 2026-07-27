@@ -1,8 +1,10 @@
 import { BrowserProvider, Contract, keccak256 } from "ethers";
 import { useEffect, useState, type FormEvent } from "react";
 
-import { CONTRACT_ADDRESSES } from "../blockchain/contracts";
-import { propertyRegistryAbi } from "../blockchain/propertyRegistryAbi";
+import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
+import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
+
+import "./RegisterPropertyForm.css";
 
 interface RegisterPropertyFormProps {
 	account: string;

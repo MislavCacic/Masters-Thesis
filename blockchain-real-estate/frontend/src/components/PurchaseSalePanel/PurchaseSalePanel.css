@@ -1,0 +1,108 @@
+.purchase-card {
+	width: min(100%, 960px);
+	padding: 36px;
+	border: 1px solid #334155;
+	border-radius: 20px;
+	background: #1e293b;
+	box-shadow: 0 24px 60px rgb(0 0 0 / 25%);
+}
+
+.purchase-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 24px;
+}
+
+.purchase-header h2 {
+	margin: 0;
+	font-size: 32px;
+}
+
+.purchase-header p:last-child {
+	max-width: 640px;
+	margin: 14px 0 0;
+	color: #cbd5e1;
+	line-height: 1.6;
+}
+
+.token-summary {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 16px;
+	margin-top: 26px;
+}
+
+.token-summary div {
+	display: grid;
+	gap: 8px;
+	padding: 18px;
+	border: 1px solid #334155;
+	border-radius: 12px;
+	background: #0f172a;
+}
+
+.token-summary span {
+	color: #94a3b8;
+	font-size: 14px;
+}
+
+.token-summary strong {
+	font-size: 20px;
+}
+
+.sale-price {
+	padding: 8px 12px;
+	border-radius: 999px;
+	background: rgb(3 105 161 / 30%);
+	color: #7dd3fc;
+	font-weight: 800;
+	white-space: nowrap;
+}
+
+.purchase-actions {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 14px;
+	margin-top: 20px;
+}
+
+.approve-button {
+	background: #0369a1;
+}
+
+.approve-button:hover:not(:disabled) {
+	background: #075985;
+}
+
+.purchase-button {
+	background: #15803d;
+}
+
+.purchase-button:hover:not(:disabled) {
+	background: #166534;
+}
+
+.purchase-warning {
+	margin: 18px 0 0;
+	padding: 13px;
+	border: 1px solid #b45309;
+	border-radius: 10px;
+	background: rgb(120 53 15 / 25%);
+	color: #fde68a;
+}
+
+@media (max-width: 760px) {
+	.purchase-card {
+		padding: 26px 20px;
+	}
+
+	.purchase-header {
+		flex-direction: column;
+	}
+
+	.token-summary,
+	.purchase-actions {
+		grid-template-columns: 1fr;
+	}
+}

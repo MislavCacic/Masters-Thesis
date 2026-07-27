@@ -1,0 +1,80 @@
+.balance-card {
+	width: min(100%, 760px);
+	padding: 30px 36px;
+	border: 1px solid #334155;
+	border-radius: 20px;
+	background: #1e293b;
+	box-shadow: 0 24px 60px rgb(0 0 0 / 25%);
+}
+
+.balance-card h2 {
+	margin: 0;
+	font-size: 30px;
+}
+
+.balance-description {
+	margin: 12px 0 0;
+	color: #cbd5e1;
+}
+
+.balance-summary {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+	margin-top: 24px;
+}
+
+.balance-summary > div {
+	display: grid;
+	gap: 7px;
+	padding: 16px;
+	border: 1px solid #334155;
+	border-radius: 11px;
+	background: #0f172a;
+}
+
+.balance-summary span {
+	color: #94a3b8;
+	font-size: 13px;
+}
+
+.balance-summary strong {
+	font-size: 18px;
+	overflow-wrap: anywhere;
+}
+
+.balance-summary .balance-amount {
+	grid-column: 1 / -1;
+	border-color: #0ea5e9;
+}
+
+.balance-amount strong {
+	color: #7dd3fc;
+	font-size: 28px;
+}
+
+.balance-refresh {
+	width: 100%;
+	margin-top: 16px;
+}
+
+.balance-note {
+	margin: 14px 0 0;
+	color: #94a3b8;
+	font-size: 13px;
+	text-align: center;
+}
+
+@media (max-width: 640px) {
+	.balance-card {
+		padding: 26px 20px;
+	}
+
+	.balance-summary {
+		grid-template-columns: 1fr;
+	}
+
+	.balance-summary .balance-amount {
+		grid-column: auto;
+	}
+}

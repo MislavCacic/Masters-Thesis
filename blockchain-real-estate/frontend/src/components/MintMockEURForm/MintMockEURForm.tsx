@@ -9,8 +9,10 @@ import {
 	parseUnits,
 } from "ethers";
 
-import { CONTRACT_ADDRESSES } from "../blockchain/contracts";
-import { mockEURAbi } from "../blockchain/mockEURAbi";
+import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
+import { mockEURAbi } from "../../blockchain/mockEURAbi";
+
+import "./MintMockEURForm.css";
 
 interface MintMockEURFormProps {
 	account: string;
@@ -157,8 +159,8 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 	}
 
 	return (
-		<section className="sale-card">
-			<div className="sale-header">
+		<section className="mint-card">
+<div className="mint-header">
 				<div>
 					<p className="eyebrow">Simulirana sredstva</p>
 
@@ -171,7 +173,7 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 				</div>
 			</div>
 
-			<form className="property-form sale-form" onSubmit={handleSubmit}>
+			<form className="property-form mint-form" onSubmit={handleSubmit}>
 				<label className="form-field">
 					<span>Adresa kupca</span>
 

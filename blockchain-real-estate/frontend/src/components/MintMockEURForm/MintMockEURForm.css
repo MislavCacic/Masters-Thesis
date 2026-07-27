@@ -1,0 +1,40 @@
+.mint-card {
+	width: min(100%, 760px);
+	padding: 36px;
+	border: 1px solid #334155;
+	border-radius: 20px;
+	background: #1e293b;
+	box-shadow: 0 24px 60px rgb(0 0 0 / 25%);
+}
+
+.mint-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 24px;
+}
+
+.mint-header h2 {
+	margin: 0;
+	font-size: 32px;
+}
+
+.mint-header p:last-child {
+	margin: 14px 0 0;
+	color: #cbd5e1;
+	line-height: 1.6;
+}
+
+.mint-form {
+	margin-top: 26px;
+}
+
+@media (max-width: 760px) {
+	.mint-card {
+		padding: 26px 20px;
+	}
+
+	.mint-header {
+		flex-direction: column;
+	}
+}
