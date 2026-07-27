@@ -5,6 +5,12 @@ import "./App.css";
 
 import { CONTRACT_ADDRESSES, HARDHAT_CHAIN_ID } from "./blockchain/contracts";
 import { propertyRegistryAbi } from "./blockchain/propertyRegistryAbi";
+import CreateSaleForm from "./components/CreateSaleForm";
+import MintMockEURForm from "./components/MintMockEURForm";
+import PurchaseSalePanel from "./components/PurchaseSalePanel";
+import RegisterPropertyForm from "./components/RegisterPropertyForm";
+import TransactionHistoryPanel from "./components/TransactionHistoryPanel";
+import VerifyPropertiesPanel from "./components/VerifyPropertiesPanel";
 
 interface MetaMaskProvider extends Eip1193Provider {
 	on(
@@ -40,6 +46,11 @@ function getErrorMessage(error: unknown): string {
 		? error.message
 		: "Dogodila se neočekivana pogreška.";
 }
+
+const DEMO_ACCOUNTS = {
+	seller: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+	buyer: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+} as const;
 
 export default function App() {
 	const [account, setAccount] = useState("");
@@ -221,6 +232,14 @@ export default function App() {
 		};
 	}, [clearWalletData, loadAccountData]);
 
+	const normalizedAccount = account.toLowerCase();
+
+	const isAdmin = roles.includes("Administrator");
+
+	const isSeller = normalizedAccount === DEMO_ACCOUNTS.seller.toLowerCase();
+
+	const isBuyer = normalizedAccount === DEMO_ACCOUNTS.buyer.toLowerCase();
+
 	return (
 		<main className="app">
 			<section className="wallet-card">
@@ -265,6 +284,24 @@ export default function App() {
 
 				{error && <p className="error">{error}</p>}
 			</section>
+
+			{account && (isAdmin || isSeller) && (
+				<RegisterPropertyForm account={account} />
+			)}
+
+			{account && isAdmin && <VerifyPropertiesPanel account={account} />}
+
+			{account && (isAdmin || isSeller) && <CreateSaleForm account={account} />}
+
+			{account && isAdmin && <MintMockEURForm account={account} />}
+
+			{account && (isAdmin || isBuyer) && (
+				<PurchaseSalePanel account={account} />
+			)}
+
+			{account && (
+				<TransactionHistoryPanel account={account} showAll={isAdmin} />
+			)}
 		</main>
 	);
 }
