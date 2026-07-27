@@ -240,6 +240,14 @@ export default function App() {
 
 	const isBuyer = normalizedAccount === DEMO_ACCOUNTS.buyer.toLowerCase();
 
+	const applicationProfile = isAdmin
+		? "Administrator"
+		: isSeller
+			? "Prodavatelj"
+			: isBuyer
+				? "Kupac"
+				: "Korisnik";
+
 	return (
 		<main className="app">
 			<section className="wallet-card">
@@ -274,7 +282,12 @@ export default function App() {
 						</p>
 
 						<p>
-							<span>Uloge</span>
+							<span>Profil aplikacije</span>
+							<strong>{applicationProfile}</strong>
+						</p>
+
+						<p>
+							<span>Blockchain uloge</span>
 							<strong>{roles.join(", ")}</strong>
 						</p>
 
