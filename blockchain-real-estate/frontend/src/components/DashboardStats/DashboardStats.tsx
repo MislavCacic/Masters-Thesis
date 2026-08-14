@@ -128,8 +128,8 @@ export default function DashboardStats({
 			const normalizedAccount = account.toLowerCase();
 
 			/* ======================================
-				   BROJ ZAPISA
-				   ====================================== */
+			   BROJ ZAPISA
+			   ====================================== */
 
 			const [propertyCount, saleCount] = await Promise.all([
 				propertyRegistry.getPropertyCount() as Promise<bigint>,
@@ -142,8 +142,8 @@ export default function DashboardStats({
 			}
 
 			/* ======================================
-				   NEKRETNINE
-				   ====================================== */
+			   NEKRETNINE
+			   ====================================== */
 
 			const propertyRequests: Promise<PropertySnapshot>[] = [];
 
@@ -202,8 +202,8 @@ export default function DashboardStats({
 			}
 
 			/* ======================================
-				   PRODAJE
-				   ====================================== */
+			   PRODAJE
+			   ====================================== */
 
 			const saleRequests: Promise<SaleSnapshot>[] = [];
 
@@ -231,15 +231,30 @@ export default function DashboardStats({
 				return;
 			}
 
+			/*
+			 * Globalne statistike koriste se za
+			 * administratorski pregled.
+			 */
 			let activeSales = 0;
 			let completedSales = 0;
 			let cancelledSales = 0;
 
-			let sellerActiveSales = 0;
-			let sellerCompletedSales = 0;
+			/*
+			 * Statistike običnog Korisnika.
+			 *
+			 * Kupac i Prodavatelj više nisu trajni
+			 * frontend profili.
+			 *
+			 * Ista Ethereum adresa može istovremeno:
+			 *
+			 * - prodavati vlastitu nekretninu
+			 * - kupovati nekretninu drugog korisnika
+			 */
+			let userActiveSales = 0;
+			let userCompletedSales = 0;
 
-			let buyerAvailableSales = 0;
-			let buyerCompletedPurchases = 0;
+			let userAvailableSales = 0;
+			let userCompletedPurchases = 0;
 
 			for (const sale of sales) {
 				if (!sale.exists) {
@@ -266,24 +281,42 @@ export default function DashboardStats({
 				if (sale.status === 0 || sale.status === 1) {
 					activeSales++;
 
+					/*
+					 * Ako je povezani račun prodavatelj,
+					 * prodaja pripada njegovim aktivnim
+					 * prodajama.
+					 */
 					if (isCurrentSeller) {
-						sellerActiveSales++;
+						userActiveSales++;
 					}
 
+					/*
+					 * Korisniku su za kupnju dostupne
+					 * samo aktivne prodaje drugih
+					 * korisnika.
+					 *
+					 * Vlastitu nekretninu ne prikazujemo
+					 * kao dostupnu kupnju.
+					 */
 					if (!isCurrentSeller) {
-						buyerAvailableSales++;
+						userAvailableSales++;
 					}
 				}
 
 				if (sale.status === 2) {
 					completedSales++;
 
+					/*
+					 * Ista završena transakcija može
+					 * predstavljati prodaju za jednu
+					 * adresu i kupnju za drugu.
+					 */
 					if (isCurrentSeller) {
-						sellerCompletedSales++;
+						userCompletedSales++;
 					}
 
 					if (isCurrentBuyer) {
-						buyerCompletedPurchases++;
+						userCompletedPurchases++;
 					}
 				}
 
@@ -293,8 +326,8 @@ export default function DashboardStats({
 			}
 
 			/* ======================================
-				   STATISTIKA PREMA PROFILU
-				   ====================================== */
+			   STATISTIKA PREMA PROFILU
+			   ====================================== */
 
 			let profileStatistics: Statistic[] = [];
 
@@ -339,37 +372,27 @@ export default function DashboardStats({
 
 					break;
 
-				case "Prodavatelj":
+				case "Korisnik":
 					profileStatistics = [
 						{
 							label: "Moje nekretnine",
 							value: ownedProperties,
 						},
 						{
-							label: "Aktivne prodaje",
-							value: sellerActiveSales,
-						},
-						{
-							label: "Završene prodaje",
-							value: sellerCompletedSales,
-						},
-					];
-
-					break;
-
-				case "Kupac":
-					profileStatistics = [
-						{
-							label: "Moje nekretnine",
-							value: ownedProperties,
+							label: "Moje aktivne prodaje",
+							value: userActiveSales,
 						},
 						{
 							label: "Dostupne prodaje",
-							value: buyerAvailableSales,
+							value: userAvailableSales,
 						},
 						{
-							label: "Završene kupnje",
-							value: buyerCompletedPurchases,
+							label: "Moje završene prodaje",
+							value: userCompletedSales,
+						},
+						{
+							label: "Moje završene kupnje",
+							value: userCompletedPurchases,
 						},
 					];
 

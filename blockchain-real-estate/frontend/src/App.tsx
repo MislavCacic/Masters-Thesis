@@ -56,12 +56,6 @@ declare global {
 
 const LOCAL_RPC_URL = "http://127.0.0.1:8545";
 
-const DEMO_ACCOUNTS = {
-	seller: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-
-	buyer: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
-} as const;
-
 function shortenAddress(address: string): string {
 	return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
@@ -111,8 +105,15 @@ export default function App() {
 	 * BrowserProvider koristimo samo kako bismo
 	 * provjerili na kojoj je mreži MetaMask.
 	 *
-	 * Blockchain uloge čitamo izravno s
-	 * lokalnog Hardhat JSON-RPC nodea.
+	 * Posebne blockchain uloge čitamo izravno
+	 * s lokalnog Hardhat JSON-RPC nodea.
+	 *
+	 * Administrator i Verifikator imaju posebne
+	 * blockchain uloge.
+	 *
+	 * Svaki ostali MetaMask račun tretira se kao
+	 * obični Korisnik koji može istovremeno
+	 * sudjelovati kao kupac i prodavatelj.
 	 */
 	const loadAccountData = useCallback(
 		async (
@@ -164,26 +165,30 @@ export default function App() {
 				readProvider,
 			);
 
-			const [adminRole, verifierRole, transferRole] = await Promise.all([
+			/*
+			 * TRANSFER_ROLE nije korisnička uloga.
+			 *
+			 * Ona pripada escrow pametnom ugovoru koji
+			 * automatski izvršava prijenos digitalnog
+			 * vlasništva.
+			 *
+			 * Za određivanje frontend profila zato
+			 * provjeravamo samo Administratora
+			 * i Verifikatora.
+			 */
+			const [adminRole, verifierRole] = await Promise.all([
 				propertyRegistry.DEFAULT_ADMIN_ROLE(),
-
 				propertyRegistry.VERIFIER_ROLE(),
-
-				propertyRegistry.TRANSFER_ROLE(),
 			]);
 
 			if (requestId !== accountRequestIdRef.current) {
 				return;
 			}
 
-			const [hasAdminRole, hasVerifierRole, hasTransferRole] =
-				await Promise.all([
-					propertyRegistry.hasRole(adminRole, selectedAccount),
-
-					propertyRegistry.hasRole(verifierRole, selectedAccount),
-
-					propertyRegistry.hasRole(transferRole, selectedAccount),
-				]);
+			const [hasAdminRole, hasVerifierRole] = await Promise.all([
+				propertyRegistry.hasRole(adminRole, selectedAccount),
+				propertyRegistry.hasRole(verifierRole, selectedAccount),
+			]);
 
 			if (requestId !== accountRequestIdRef.current) {
 				return;
@@ -199,11 +204,22 @@ export default function App() {
 				detectedRoles.push("Verifikator");
 			}
 
-			if (hasTransferRole) {
-				detectedRoles.push("Prijenos vlasništva");
-			}
-
-			if (detectedRoles.length === 0) {
+			/*
+			 * Svaki račun bez posebne administrativne
+			 * ili verifikatorske uloge obični je Korisnik.
+			 *
+			 * Korisnik nije trajno označen kao Kupac
+			 * ili Prodavatelj.
+			 *
+			 * Njegova uloga ovisi o konkretnoj radnji:
+			 *
+			 * - kada registrira i prodaje vlastitu
+			 *   nekretninu nastupa kao prodavatelj
+			 *
+			 * - kada kupuje nekretninu drugog korisnika
+			 *   nastupa kao kupac
+			 */
+			if (!hasAdminRole && !hasVerifierRole) {
 				detectedRoles.push("Korisnik");
 			}
 
@@ -394,35 +410,31 @@ export default function App() {
 		};
 	}, [clearWalletData, loadAccountData, prepareAccountChange]);
 
-	const normalizedAccount = account.toLowerCase();
-
 	const isAdmin = roles.includes("Administrator");
 
 	const isVerifier = roles.includes("Verifikator");
 
-	const isSeller = normalizedAccount === DEMO_ACCOUNTS.seller.toLowerCase();
-
-	const isBuyer = normalizedAccount === DEMO_ACCOUNTS.buyer.toLowerCase();
+	const isUser = roles.includes("Korisnik");
 
 	/*
-	 * Prioritet blockchain uloga:
+	 * Frontend sada ima samo tri profila:
 	 *
 	 * Administrator
 	 * Verifikator
+	 * Korisnik
 	 *
-	 * Prodavatelj i Kupac su demo aplikacijski
-	 * profili određeni adresama lokalnih
-	 * Hardhat računa.
+	 * Kupac i Prodavatelj više nisu trajni
+	 * profili vezani uz unaprijed definirane
+	 * Ethereum adrese.
+	 *
+	 * Obični Korisnik može obavljati obje vrste
+	 * aktivnosti ovisno o konkretnoj transakciji.
 	 */
 	const applicationProfile = isAdmin
 		? "Administrator"
 		: isVerifier
 			? "Verifikator"
-			: isSeller
-				? "Prodavatelj"
-				: isBuyer
-					? "Kupac"
-					: "Korisnik";
+			: "Korisnik";
 
 	return (
 		<main className="app">
@@ -494,6 +506,7 @@ export default function App() {
 							/>
 						)}
 
+						{/* Administrator vidi sve registrirane nekretnine. */}
 						{activeSection === "all-properties" && isAdmin && (
 							<PropertyPanel
 								key={`all-properties-${account}`}
@@ -502,7 +515,8 @@ export default function App() {
 							/>
 						)}
 
-						{activeSection === "my-properties" && (isSeller || isBuyer) && (
+						{/* Korisnik vidi samo nekretnine čiji je trenutni digitalni vlasnik. */}
+						{activeSection === "my-properties" && isUser && (
 							<PropertyPanel
 								key={`my-properties-${account}`}
 								account={account}
@@ -510,13 +524,15 @@ export default function App() {
 							/>
 						)}
 
-						{activeSection === "register-property" && isSeller && (
+						{/* Svaki obični Korisnik može registrirati novu nekretninu. */}
+						{activeSection === "register-property" && isUser && (
 							<RegisterPropertyForm
 								key={`register-property-${account}`}
 								account={account}
 							/>
 						)}
 
+						{/* Dokumentaciju potvrđuje samo Verifikator. */}
 						{activeSection === "verification" && isVerifier && (
 							<VerifyPropertiesPanel
 								key={`verification-${account}`}
@@ -524,21 +540,22 @@ export default function App() {
 							/>
 						)}
 
-						{activeSection === "create-sale" && isSeller && (
+						{/* Korisnik može ponuditi na prodaju vlastitu potvrđenu nekretninu. */}
+						{activeSection === "create-sale" && isUser && (
 							<CreateSaleForm
 								key={`create-sale-${account}`}
 								account={account}
 							/>
 						)}
 
-						{/* 
-							Prodavatelj vidi samo svoje aktivne prodaje.
-
-							Administrator vidi sve aktivne prodaje,
-							ali ih ne može otkazivati jer ActiveSalesPanel
-							dopušta cancelSale samo stvarnom prodavatelju.
-						*/}
-						{activeSection === "active-sales" && (isSeller || isAdmin) && (
+						{/*
+						 * Korisnik vidi samo svoje aktivne prodaje.
+						 *
+						 * Administrator vidi sve aktivne prodaje,
+						 * ali ih ne može otkazivati jer ActiveSalesPanel
+						 * dopušta cancelSale samo stvarnom prodavatelju.
+						 */}
+						{activeSection === "active-sales" && (isUser || isAdmin) && (
 							<ActiveSalesPanel
 								key={`active-sales-${account}`}
 								account={account}
@@ -546,25 +563,36 @@ export default function App() {
 							/>
 						)}
 
-						{activeSection === "purchase" && isBuyer && (
+						{/*
+						 * Svaki obični Korisnik može pregledavati
+						 * aktivne prodaje drugih korisnika i kupovati
+						 * nekretnine koje nisu u njegovom vlasništvu.
+						 */}
+						{activeSection === "purchase" && isUser && (
 							<PurchaseSalePanel
 								key={`purchase-${account}`}
 								account={account}
 							/>
 						)}
 
+						{/* MockEUR dodjeljuje samo Administrator. */}
 						{activeSection === "mockeur" && isAdmin && (
 							<MintMockEURForm key={`mockeur-${account}`} account={account} />
 						)}
 
-						{activeSection === "history" &&
-							(isAdmin || isSeller || isBuyer) && (
-								<TransactionHistoryPanel
-									key={`history-${account}`}
-									account={account}
-									showAll={isAdmin}
-								/>
-							)}
+						{/*
+						 * Administrator vidi cjelokupnu povijest.
+						 *
+						 * Obični Korisnik vidi prodaje i kupnje
+						 * povezane s vlastitom Ethereum adresom.
+						 */}
+						{activeSection === "history" && (isAdmin || isUser) && (
+							<TransactionHistoryPanel
+								key={`history-${account}`}
+								account={account}
+								showAll={isAdmin}
+							/>
+						)}
 					</div>
 				</>
 			)}

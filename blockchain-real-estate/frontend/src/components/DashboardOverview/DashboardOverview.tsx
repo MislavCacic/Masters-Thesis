@@ -49,7 +49,7 @@ const actionsByProfile: Record<string, QuickAction[]> = {
 		},
 	],
 
-	Prodavatelj: [
+	Korisnik: [
 		{
 			label: "Moje nekretnine",
 			section: "my-properties",
@@ -63,30 +63,22 @@ const actionsByProfile: Record<string, QuickAction[]> = {
 		{
 			label: "Kreiraj prodaju",
 			section: "create-sale",
-			description: "Ponudi potvrđenu nekretninu na prodaju.",
+			description: "Ponudi svoju potvrđenu nekretninu na prodaju.",
 		},
 		{
 			label: "Aktivne prodaje",
 			section: "active-sales",
 			description: "Pregledaj ili otkaži svoje aktivne prodaje.",
 		},
-	],
-
-	Kupac: [
-		{
-			label: "Moje nekretnine",
-			section: "my-properties",
-			description: "Pregled nekretnina koje su u tvom digitalnom vlasništvu.",
-		},
 		{
 			label: "Kupnja nekretnine",
 			section: "purchase",
-			description: "Pregledaj aktivne prodaje i pokreni kupoprodaju.",
+			description: "Pregledaj tuđe aktivne prodaje i pokreni kupoprodaju.",
 		},
 		{
 			label: "Povijest",
 			section: "history",
-			description: "Pregledaj prethodno završene kupoprodaje.",
+			description: "Pregledaj svoje prethodne kupnje i prodaje.",
 		},
 	],
 };
@@ -98,8 +90,18 @@ export default function DashboardOverview({
 }: DashboardOverviewProps) {
 	const actions = actionsByProfile[applicationProfile] ?? [];
 
-	const showAccountBalance =
-		applicationProfile === "Prodavatelj" || applicationProfile === "Kupac";
+	/*
+	 * MockEUR saldo prikazuje se običnom Korisniku.
+	 *
+	 * Korisnik može istovremeno nastupati kao:
+	 *
+	 * - prodavatelj vlastite nekretnine
+	 * - kupac nekretnine drugog korisnika
+	 *
+	 * Administrator i Verifikator ne trebaju
+	 * osobni MockEUR saldo na početnom pregledu.
+	 */
+	const showAccountBalance = applicationProfile === "Korisnik";
 
 	return (
 		<div className="dashboard-overview">

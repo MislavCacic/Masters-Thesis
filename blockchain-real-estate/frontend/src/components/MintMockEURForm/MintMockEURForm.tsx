@@ -100,7 +100,7 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 		const trimmedRecipient = recipientAddress.trim();
 
 		if (!isAddress(trimmedRecipient)) {
-			setErrorMessage("Unesena adresa kupca nije valjana Ethereum adresa.");
+			setErrorMessage("Unesena adresa korisnika nije valjana Ethereum adresa.");
 
 			return;
 		}
@@ -217,7 +217,7 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 
 			if (balanceAfter !== expectedBalance) {
 				throw new Error(
-					"Blockchain stanje primatelja ne odgovara očekivanoj količini nakon dodjele sredstava.",
+					"Blockchain stanje korisnika ne odgovara očekivanoj količini nakon dodjele sredstava.",
 				);
 			}
 
@@ -228,10 +228,10 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 			setStatusMessage("");
 
 			setSuccessMessage(
-				`Kupcu je dodijeljeno ${formatUnits(
+				`Korisniku je dodijeljeno ${formatUnits(
 					amountInSmallestUnits,
 					Number(tokenDecimals),
-				)} ${tokenSymbol}. Novo stanje kupca: ${formatUnits(
+				)} ${tokenSymbol}. Novo stanje korisnika: ${formatUnits(
 					balanceAfter,
 					Number(tokenDecimals),
 				)} ${tokenSymbol}.`,
@@ -256,7 +256,7 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 					<h2>Dodjela MockEUR tokena</h2>
 
 					<p>
-						Administrator kupcu dodjeljuje simulirana sredstva potrebna za
+						Administrator korisnicima dodjeljuje simulirana sredstva potrebna za
 						izvršenje kupoprodaje.
 					</p>
 				</div>
@@ -264,7 +264,7 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 
 			<form className="property-form mint-form" onSubmit={handleSubmit}>
 				<label className="form-field">
-					<span>Adresa kupca</span>
+					<span>Adresa korisnika</span>
 
 					<input
 						type="text"
@@ -275,7 +275,7 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 						required
 					/>
 
-					<small>Unesi punu Ethereum adresu računa Kupac iz MetaMaska.</small>
+					<small>Unesi punu Ethereum adresu korisnika iz MetaMaska.</small>
 				</label>
 
 				<label className="form-field">
@@ -298,7 +298,7 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 				</label>
 
 				<button type="submit" disabled={isSubmitting}>
-					{isSubmitting ? "Dodjela u tijeku..." : "Dodijeli sredstva kupcu"}
+					{isSubmitting ? "Dodjela u tijeku..." : "Dodijeli sredstva korisniku"}
 				</button>
 			</form>
 

@@ -58,7 +58,7 @@ const navigationByProfile: Record<string, NavigationItem[]> = {
 		},
 	],
 
-	Prodavatelj: [
+	Korisnik: [
 		{
 			id: "overview",
 			label: "Pregled",
@@ -78,21 +78,6 @@ const navigationByProfile: Record<string, NavigationItem[]> = {
 		{
 			id: "active-sales",
 			label: "Aktivne prodaje",
-		},
-		{
-			id: "history",
-			label: "Povijest",
-		},
-	],
-
-	Kupac: [
-		{
-			id: "overview",
-			label: "Pregled",
-		},
-		{
-			id: "my-properties",
-			label: "Moje nekretnine",
 		},
 		{
 			id: "purchase",
