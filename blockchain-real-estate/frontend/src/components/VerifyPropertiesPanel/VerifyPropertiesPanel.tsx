@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
 import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
+import { getPropertyStatusLabel } from "../../utils/statusLabels";
 
 import "./VerifyPropertiesPanel.css";
 
@@ -21,22 +22,21 @@ interface PropertyData {
 	exists: boolean;
 }
 
-const VERIFICATION_STATUS = {
-	0: "Pending",
-	1: "Verified",
-	2: "Rejected",
-} as const;
-
 function shortenAddress(address: string): string {
 	return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-function getStatusName(status: number): string {
-	if (status === 0 || status === 1 || status === 2) {
-		return VERIFICATION_STATUS[status];
+function getPropertyStatusClass(status: number): string {
+	switch (status) {
+		case 0:
+			return "pending";
+		case 1:
+			return "verified";
+		case 2:
+			return "rejected";
+		default:
+			return "unknown";
 	}
-
-	return "Unknown";
 }
 
 function getErrorMessage(error: unknown): string {
@@ -223,7 +223,13 @@ export default function VerifyPropertiesPanel({
 
 			<div className="property-list">
 				{properties.map((property) => {
-					const statusName = getStatusName(property.verificationStatus);
+					const statusLabel = getPropertyStatusLabel(
+						property.verificationStatus,
+					);
+
+					const statusClass = getPropertyStatusClass(
+						property.verificationStatus,
+					);
 
 					const isPending = property.verificationStatus === 0;
 
@@ -240,10 +246,8 @@ export default function VerifyPropertiesPanel({
 									<h3>{property.propertyAddress}</h3>
 								</div>
 
-								<span
-									className={`status-badge status-${statusName.toLowerCase()}`}
-								>
-									{statusName}
+								<span className={`status-badge status-${statusClass}`}>
+									{statusLabel}
 								</span>
 							</div>
 

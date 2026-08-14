@@ -6,6 +6,7 @@ import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
 import { mockEURAbi } from "../../blockchain/mockEURAbi";
 import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
 import { realEstateEscrowAbi } from "../../blockchain/realEstateEscrowAbi";
+import { getSaleStatusLabel } from "../../utils/statusLabels";
 
 import "./PurchaseSalePanel.css";
 
@@ -305,7 +306,9 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 			const completedStatus = Number(completedSale.status);
 
 			if (completedStatus !== 2) {
-				throw new Error("Prodaja nije dobila očekivani status Completed.");
+				throw new Error(
+					`Prodaja nije dobila očekivani status ${getSaleStatusLabel(2)}.`,
+				);
 			}
 
 			if (newDigitalOwner.toLowerCase() !== account.toLowerCase()) {

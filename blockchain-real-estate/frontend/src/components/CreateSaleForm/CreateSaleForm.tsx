@@ -198,7 +198,7 @@ export default function CreateSaleForm({ account }: CreateSaleFormProps) {
 		}
 
 		if (!selectedPropertyId) {
-			setErrorMessage("Odaberi verificiranu nekretninu.");
+			setErrorMessage("Odaberi potvrđenu nekretninu.");
 			return;
 		}
 
@@ -284,7 +284,7 @@ export default function CreateSaleForm({ account }: CreateSaleFormProps) {
 					<h2>Kreiranje prodaje</h2>
 
 					<p>
-						Prodavatelj odabire verificiranu nekretninu u svom vlasništvu i
+						Prodavatelj odabire potvrđenu nekretninu u svom vlasništvu i
 						određuje prodajnu cijenu.
 					</p>
 				</div>
@@ -308,13 +308,13 @@ export default function CreateSaleForm({ account }: CreateSaleFormProps) {
 
 			{isLoading && (
 				<p className="transaction-status">
-					Učitavaju se verificirane nekretnine...
+					Učitavaju se potvrđene nekretnine...
 				</p>
 			)}
 
 			{!isLoading && properties.length === 0 && (
 				<p className="empty-state">
-					Povezani račun nema verificiranu nekretninu dostupnu za prodaju.
+					Povezani račun nema potvrđenu nekretninu dostupnu za prodaju.
 				</p>
 			)}
 

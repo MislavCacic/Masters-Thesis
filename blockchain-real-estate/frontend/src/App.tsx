@@ -6,11 +6,14 @@ import "./styles/shared.css";
 
 import { CONTRACT_ADDRESSES, HARDHAT_CHAIN_ID } from "./blockchain/contracts";
 import { propertyRegistryAbi } from "./blockchain/propertyRegistryAbi";
-import AccountBalancePanel from "./components/AccountBalancePanel/AccountBalancePanel";
-import ActiveSalesManagementPanel from "./components/ActiveSalesManagementPanel/ActiveSalesManagementPanel";
+import ActiveSalesPanel from "./components/ActiveSalesPanel/ActiveSalesPanel";
 import CreateSaleForm from "./components/CreateSaleForm/CreateSaleForm";
+import DashboardNavigation, {
+	type DashboardSection,
+} from "./components/DashboardNavigation/DashboardNavigation";
+import DashboardOverview from "./components/DashboardOverview/DashboardOverview";
 import MintMockEURForm from "./components/MintMockEURForm/MintMockEURForm";
-import PropertyPortfolioPanel from "./components/PropertyPortfolioPanel/PropertyPortfolioPanel";
+import PropertyPanel from "./components/PropertyPanel/PropertyPanel";
 import PurchaseSalePanel from "./components/PurchaseSalePanel/PurchaseSalePanel";
 import RegisterPropertyForm from "./components/RegisterPropertyForm/RegisterPropertyForm";
 import TransactionHistoryPanel from "./components/TransactionHistoryPanel/TransactionHistoryPanel";
@@ -62,6 +65,8 @@ export default function App() {
 	const [roles, setRoles] = useState<string[]>([]);
 	const [error, setError] = useState("");
 	const [isConnecting, setIsConnecting] = useState(false);
+	const [activeSection, setActiveSection] =
+		useState<DashboardSection>("overview");
 
 	const clearWalletData = useCallback((): void => {
 		setAccount("");
@@ -163,6 +168,7 @@ export default function App() {
 
 		async function handleAccountsChanged(accounts: string[]): Promise<void> {
 			setError("");
+			setActiveSection("overview");
 
 			const selectedAccount = accounts[0];
 
@@ -182,6 +188,7 @@ export default function App() {
 
 		async function handleChainChanged(): Promise<void> {
 			setError("");
+			setActiveSection("overview");
 			clearWalletData();
 
 			try {
@@ -307,35 +314,56 @@ export default function App() {
 			</section>
 
 			{account && (
-				<AccountBalancePanel
-					account={account}
-					applicationProfile={applicationProfile}
+				<DashboardNavigation
+					profile={applicationProfile}
+					activeSection={activeSection}
+					onSectionChange={setActiveSection}
 				/>
 			)}
 
-			{account && (
-				<PropertyPortfolioPanel account={account} showAll={isAdmin} />
+			{account && activeSection === "overview" && (
+				<DashboardOverview
+					account={account}
+					applicationProfile={applicationProfile}
+					onSectionChange={setActiveSection}
+				/>
 			)}
 
-			{account && (isAdmin || isSeller) && (
+			{account && activeSection === "all-properties" && isAdmin && (
+				<PropertyPanel account={account} showAll />
+			)}
+
+			{account &&
+				activeSection === "my-properties" &&
+				(isSeller || isBuyer) && (
+					<PropertyPanel account={account} showAll={false} />
+				)}
+
+			{account && activeSection === "register-property" && isSeller && (
 				<RegisterPropertyForm account={account} />
 			)}
 
-			{account && isVerifier && <VerifyPropertiesPanel account={account} />}
-
-			{account && (isAdmin || isSeller) && <CreateSaleForm account={account} />}
-
-			{account && (isAdmin || isSeller) && (
-				<ActiveSalesManagementPanel account={account} showAll={isAdmin} />
+			{account && activeSection === "verification" && isVerifier && (
+				<VerifyPropertiesPanel account={account} />
 			)}
 
-			{account && isAdmin && <MintMockEURForm account={account} />}
+			{account && activeSection === "create-sale" && isSeller && (
+				<CreateSaleForm account={account} />
+			)}
 
-			{account && (isAdmin || isBuyer) && (
+			{account && activeSection === "active-sales" && isSeller && (
+				<ActiveSalesPanel account={account} showAll={false} />
+			)}
+
+			{account && activeSection === "purchase" && isBuyer && (
 				<PurchaseSalePanel account={account} />
 			)}
 
-			{account && (
+			{account && activeSection === "mockeur" && isAdmin && (
+				<MintMockEURForm account={account} />
+			)}
+
+			{account && activeSection === "history" && (
 				<TransactionHistoryPanel account={account} showAll={isAdmin} />
 			)}
 		</main>

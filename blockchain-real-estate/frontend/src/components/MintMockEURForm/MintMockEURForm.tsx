@@ -160,7 +160,7 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 
 	return (
 		<section className="mint-card">
-<div className="mint-header">
+			<div className="mint-header">
 				<div>
 					<p className="eyebrow">Simulirana sredstva</p>
 

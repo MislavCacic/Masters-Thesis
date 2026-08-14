@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
 import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
+import { getPropertyStatusLabel } from "../../utils/statusLabels";
 
 import "./RegisterPropertyForm.css";
 
@@ -160,7 +161,7 @@ export default function RegisterPropertyForm({
 			setStatusMessage("");
 
 			setSuccessMessage(
-				`Nekretnina je registrirana. ID nekretnine: ${propertyIdText}. Status provjere: Pending.`,
+				`Nekretnina je registrirana. ID nekretnine: ${propertyIdText}. Status provjere: ${getPropertyStatusLabel(0)}.`,
 			);
 
 			setCadastralMunicipality("");

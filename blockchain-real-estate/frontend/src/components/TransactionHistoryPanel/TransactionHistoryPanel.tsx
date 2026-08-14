@@ -5,6 +5,7 @@ import { BrowserProvider, Contract, formatUnits, ZeroAddress } from "ethers";
 import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
 import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
 import { realEstateEscrowAbi } from "../../blockchain/realEstateEscrowAbi";
+import { getSaleStatusLabel } from "../../utils/statusLabels";
 
 import "./TransactionHistoryPanel.css";
 
@@ -214,7 +215,7 @@ export default function TransactionHistoryPanel({
 											: "status-badge status-rejected"
 									}
 								>
-									{isCompleted ? "Completed" : "Cancelled"}
+									{getSaleStatusLabel(sale.status)}
 								</span>
 							</div>
 

@@ -4,10 +4,11 @@ import { BrowserProvider, Contract } from "ethers";
 
 import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
 import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
+import { getPropertyStatusLabel } from "../../utils/statusLabels";
 
-import "./PropertyPortfolioPanel.css";
+import "./PropertyPanel.css";
 
-interface PropertyPortfolioPanelProps {
+interface PropertyPanelProps {
 	account: string;
 	showAll: boolean;
 }
@@ -23,22 +24,21 @@ interface PropertyData {
 	exists: boolean;
 }
 
-const VERIFICATION_STATUS = {
-	0: "Pending",
-	1: "Verified",
-	2: "Rejected",
-} as const;
-
 function shortenAddress(address: string): string {
 	return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-function getStatusName(status: number): string {
-	if (status === 0 || status === 1 || status === 2) {
-		return VERIFICATION_STATUS[status];
+function getPropertyStatusClass(status: number): string {
+	switch (status) {
+		case 0:
+			return "pending";
+		case 1:
+			return "verified";
+		case 2:
+			return "rejected";
+		default:
+			return "unknown";
 	}
-
-	return "Unknown";
 }
 
 function getErrorMessage(error: unknown): string {
@@ -65,10 +65,10 @@ function getErrorMessage(error: unknown): string {
 	return "Dohvat nekretnina nije uspio.";
 }
 
-export default function PropertyPortfolioPanel({
+export default function PropertyPanel({
 	account,
 	showAll,
-}: PropertyPortfolioPanelProps) {
+}: PropertyPanelProps) {
 	const [properties, setProperties] = useState<PropertyData[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 	const [errorMessage, setErrorMessage] = useState("");
@@ -181,7 +181,13 @@ export default function PropertyPortfolioPanel({
 
 			<div className="property-list">
 				{properties.map((property) => {
-					const statusName = getStatusName(property.verificationStatus);
+					const statusLabel = getPropertyStatusLabel(
+						property.verificationStatus,
+					);
+
+					const statusClass = getPropertyStatusClass(
+						property.verificationStatus,
+					);
 
 					return (
 						<article className="property-item" key={property.id.toString()}>
@@ -194,10 +200,8 @@ export default function PropertyPortfolioPanel({
 									<h3>{property.propertyAddress}</h3>
 								</div>
 
-								<span
-									className={`status-badge status-${statusName.toLowerCase()}`}
-								>
-									{statusName}
+								<span className={`status-badge status-${statusClass}`}>
+									{statusLabel}
 								</span>
 							</div>
 

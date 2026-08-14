@@ -5,10 +5,11 @@ import { BrowserProvider, Contract, formatUnits } from "ethers";
 import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
 import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
 import { realEstateEscrowAbi } from "../../blockchain/realEstateEscrowAbi";
+import { getSaleStatusLabel } from "../../utils/statusLabels";
 
-import "./ActiveSalesManagementPanel.css";
+import "./ActiveSalesPanel.css";
 
-interface ActiveSalesManagementPanelProps {
+interface ActiveSalesPanelProps {
 	account: string;
 	showAll: boolean;
 }
@@ -56,10 +57,10 @@ function getErrorMessage(error: unknown): string {
 	return "Dohvat ili otkazivanje prodaje nije uspjelo.";
 }
 
-export default function ActiveSalesManagementPanel({
+export default function ActiveSalesPanel({
 	account,
 	showAll,
-}: ActiveSalesManagementPanelProps) {
+}: ActiveSalesPanelProps) {
 	const [activeSales, setActiveSales] = useState<ActiveSale[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 
@@ -201,7 +202,7 @@ export default function ActiveSalesManagementPanel({
 			const cancelledStatus = Number(cancelledSale.status);
 
 			if (cancelledStatus !== 3) {
-				throw new Error("Prodaja nije dobila očekivani status Cancelled.");
+				throw new Error("Prodaja nije dobila očekivani status Otkazana.");
 			}
 
 			setStatusMessage("");
@@ -273,7 +274,9 @@ export default function ActiveSalesManagementPanel({
 									<h3>{sale.propertyAddress}</h3>
 								</div>
 
-								<span className="status-badge status-pending">Created</span>
+								<span className="status-badge status-pending">
+									{getSaleStatusLabel(0)}
+								</span>
 							</div>
 
 							<dl className="property-details active-sale-details">
