@@ -1,8 +1,32 @@
 import hre from "hardhat";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { keccak256, toBytes } from "viem";
 
 const { viem } = await hre.network.create();
+
+/*
+ * DocumentType enum iz PropertyRegistry.sol:
+ *
+ * 0 = LandRegistryExtract
+ * 1 = CadastralDocument
+ * 2 = OwnershipDocument
+ */
+const DOCUMENT_TYPE = {
+	LAND_REGISTRY_EXTRACT: 0,
+	CADASTRAL_DOCUMENT: 1,
+	OWNERSHIP_DOCUMENT: 2,
+} as const;
+
+const REQUIRED_DOCUMENT_TYPES = [
+	DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT,
+	DOCUMENT_TYPE.CADASTRAL_DOCUMENT,
+	DOCUMENT_TYPE.OWNERSHIP_DOCUMENT,
+] as const;
+
+function createDocumentHash(content: string) {
+	return keccak256(toBytes(content));
+}
 
 async function createEscrowTestContext() {
 	const [administrator, seller, buyer, verifier, unauthorizedUser] =
@@ -19,6 +43,10 @@ async function createEscrowTestContext() {
 		mockEUR.address,
 	]);
 
+	/* ==================================================
+	   ULOGE
+	   ================================================== */
+
 	const verifierRole = await propertyRegistry.read.VERIFIER_ROLE();
 
 	const grantVerifierRoleTransactionHash =
@@ -33,33 +61,136 @@ async function createEscrowTestContext() {
 		hash: grantVerifierRoleTransactionHash,
 	});
 
-	async function verifyProperty(propertyId: bigint): Promise<void> {
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
-			[propertyId],
+	async function grantTransferRoleToEscrow(): Promise<void> {
+		const transferRole = await propertyRegistry.read.TRANSFER_ROLE();
+
+		const transactionHash = await propertyRegistry.write.grantRole(
+			[transferRole, realEstateEscrow.address],
+			{
+				account: administrator.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: transactionHash,
+		});
+	}
+
+	/* ==================================================
+	   REGISTRACIJA NEKRETNINE
+	   ================================================== */
+
+	async function registerProperty(
+		cadastralMunicipality = "Osijek",
+		parcelNumber = "6000/6",
+		propertyAddress = "Trg slobode 1, Osijek",
+	): Promise<void> {
+		const transactionHash = await propertyRegistry.write.registerProperty(
+			[cadastralMunicipality, parcelNumber, propertyAddress],
+			{
+				account: seller.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: transactionHash,
+		});
+	}
+
+	/* ==================================================
+	   DOKUMENTACIJA
+	   ================================================== */
+
+	async function submitDocument(
+		propertyId: bigint,
+		documentType: 0 | 1 | 2,
+		content: string,
+	): Promise<void> {
+		const documentHash = createDocumentHash(content);
+
+		const transactionHash = await propertyRegistry.write.submitPropertyDocument(
+			[propertyId, documentType, documentHash],
+			{
+				account: seller.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: transactionHash,
+		});
+	}
+
+	async function submitAllRequiredDocuments(propertyId: bigint): Promise<void> {
+		await submitDocument(
+			propertyId,
+			DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT,
+			`zemljisnoknjizni izvadak ${propertyId}`,
+		);
+
+		await submitDocument(
+			propertyId,
+			DOCUMENT_TYPE.CADASTRAL_DOCUMENT,
+			`katastarski dokument ${propertyId}`,
+		);
+
+		await submitDocument(
+			propertyId,
+			DOCUMENT_TYPE.OWNERSHIP_DOCUMENT,
+			`dokaz vlasnistva ${propertyId}`,
+		);
+	}
+
+	async function verifyDocument(
+		propertyId: bigint,
+		documentType: 0 | 1 | 2,
+	): Promise<void> {
+		const transactionHash = await propertyRegistry.write.verifyPropertyDocument(
+			[propertyId, documentType],
 			{
 				account: verifier.account,
 			},
 		);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: verifyTransactionHash,
+			hash: transactionHash,
 		});
 	}
 
-	async function grantTransferRoleToEscrow(): Promise<void> {
-		const transferRole = await propertyRegistry.read.TRANSFER_ROLE();
+	async function verifyAllRequiredDocuments(propertyId: bigint): Promise<void> {
+		for (const documentType of REQUIRED_DOCUMENT_TYPES) {
+			await verifyDocument(propertyId, documentType);
+		}
+	}
 
-		const grantTransferRoleTransactionHash =
-			await propertyRegistry.write.grantRole(
-				[transferRole, realEstateEscrow.address],
-				{
-					account: administrator.account,
-				},
-			);
+	/* ==================================================
+	   KOMPLETNO PRIPREMLJENA NEKRETNINA
+	   ================================================== */
 
-		await publicClient.waitForTransactionReceipt({
-			hash: grantTransferRoleTransactionHash,
-		});
+	async function prepareVerifiedProperty(
+		propertyId: bigint = 1n,
+		cadastralMunicipality = "Osijek",
+		parcelNumber = "6000/6",
+		propertyAddress = "Trg slobode 1, Osijek",
+	): Promise<void> {
+		await registerProperty(
+			cadastralMunicipality,
+			parcelNumber,
+			propertyAddress,
+		);
+
+		await submitAllRequiredDocuments(propertyId);
+
+		await verifyAllRequiredDocuments(propertyId);
+
+		const hasValidDocuments = await propertyRegistry.read.hasValidDocuments([
+			propertyId,
+		]);
+
+		assert.equal(
+			hasValidDocuments,
+			true,
+			"Testna nekretnina mora imati valjanu dokumentaciju",
+		);
 	}
 
 	return {
@@ -72,26 +203,27 @@ async function createEscrowTestContext() {
 		propertyRegistry,
 		mockEUR,
 		realEstateEscrow,
-		verifyProperty,
 		grantTransferRoleToEscrow,
+		registerProperty,
+		submitDocument,
+		submitAllRequiredDocuments,
+		verifyDocument,
+		verifyAllRequiredDocuments,
+		prepareVerifiedProperty,
 	};
 }
 
 describe("RealEstateEscrow", function () {
 	it("postavlja escrow i povezuje ga s registrom i tokenom", async function () {
-		// Postavljanje registra nekretnina.
 		const propertyRegistry = await viem.deployContract("PropertyRegistry");
 
-		// Postavljanje simuliranog euro tokena.
 		const mockEUR = await viem.deployContract("MockEUR");
 
-		// Postavljanje escrow ugovora uz adrese registra i tokena.
 		const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
 			propertyRegistry.address,
 			mockEUR.address,
 		]);
 
-		// Čitanje spremljenih adresa iz escrow ugovora.
 		const storedRegistryAddress =
 			await realEstateEscrow.read.propertyRegistry();
 
@@ -99,11 +231,9 @@ describe("RealEstateEscrow", function () {
 			await realEstateEscrow.read.paymentToken();
 
 		console.log("\n--- REAL ESTATE ESCROW ---");
-		console.log("Adresa PropertyRegistry ugovora:", propertyRegistry.address);
-		console.log("Adresa MockEUR ugovora:", mockEUR.address);
-		console.log("Adresa RealEstateEscrow ugovora:", realEstateEscrow.address);
-		console.log("Registar spremljen u escrowu:", storedRegistryAddress);
-		console.log("Token spremljen u escrowu:", storedPaymentTokenAddress);
+		console.log("PropertyRegistry:", propertyRegistry.address);
+		console.log("MockEUR:", mockEUR.address);
+		console.log("RealEstateEscrow:", realEstateEscrow.address);
 		console.log("--------------------------\n");
 
 		assert.equal(
@@ -119,37 +249,29 @@ describe("RealEstateEscrow", function () {
 		);
 	});
 
-	it("vlasnik potvrđene nekretnine kreira prodaju", async function () {
+	it("vlasnik nekretnine s potpuno potvrđenom dokumentacijom kreira prodaju", async function () {
 		const {
 			seller,
 			publicClient,
 			propertyRegistry,
 			realEstateEscrow,
-			verifyProperty,
+			prepareVerifiedProperty,
 		} = await createEscrowTestContext();
 
-		const documentHash =
-			"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+		const propertyPrice = 15_000_000n;
 
-		const propertyPrice = 15_000_000n; // 150.000,00 mEUR
+		await prepareVerifiedProperty();
 
-		// 1. Prodavatelj registrira nekretninu.
-		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty(
-				["Osijek", "6000/6", "Trg slobode 1, Osijek", documentHash],
-				{
-					account: seller.account,
-				},
-			);
+		const hasValidDocuments = await propertyRegistry.read.hasValidDocuments([
+			1n,
+		]);
 
-		await publicClient.waitForTransactionReceipt({
-			hash: registerTransactionHash,
-		});
+		assert.equal(
+			hasValidDocuments,
+			true,
+			"Dokumentacija mora biti valjana prije kreiranja prodaje",
+		);
 
-		// 2. Verifikator potvrđuje nekretninu.
-		await verifyProperty(1n);
-
-		// 3. Vlasnik nekretnine kreira ponudu za prodaju.
 		const createSaleTransactionHash = await realEstateEscrow.write.createSale(
 			[1n, propertyPrice],
 			{
@@ -161,7 +283,6 @@ describe("RealEstateEscrow", function () {
 			hash: createSaleTransactionHash,
 		});
 
-		// 4. Dohvat spremljene prodaje.
 		const sale = await realEstateEscrow.read.getSale([1n]);
 
 		console.log("\n--- KREIRANA PRODAJA ---");
@@ -169,10 +290,8 @@ describe("RealEstateEscrow", function () {
 		console.log("ID nekretnine:", sale.propertyId.toString());
 		console.log("Prodavatelj:", sale.seller);
 		console.log("Kupac:", sale.buyer);
-		console.log("Cijena u najmanjim jedinicama:", sale.price.toString());
-		console.log("Cijena u mEUR:", Number(sale.price) / 100);
-		console.log("Status prodaje:", sale.status);
-		console.log("Postoji:", sale.exists);
+		console.log("Cijena:", sale.price.toString());
+		console.log("Status:", sale.status);
 		console.log("-------------------------\n");
 
 		assert.equal(sale.id, 1n);
@@ -186,160 +305,306 @@ describe("RealEstateEscrow", function () {
 		assert.equal(sale.buyer, "0x0000000000000000000000000000000000000000");
 
 		assert.equal(sale.price, propertyPrice);
-		assert.equal(sale.status, 0);
+
+		assert.equal(sale.status, 0, "Nova prodaja mora imati status Created");
+
 		assert.equal(sale.exists, true);
 	});
 
-	it("prodavatelj otkazuje prodaju prije uplate i ponovno kreira novu prodaju", async function () {
+	it("ne dopušta kreiranje prodaje ako nisu potvrđena sva tri dokumenta", async function () {
 		const {
 			seller,
-			publicClient,
 			propertyRegistry,
 			realEstateEscrow,
-			verifyProperty,
+			registerProperty,
+			submitAllRequiredDocuments,
+			verifyDocument,
 		} = await createEscrowTestContext();
 
-		const documentHash =
-			"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+		const propertyPrice = 15_000_000n;
 
-		const firstPrice = 15_000_000n; // 150.000,00 mEUR
-		const secondPrice = 16_000_000n; // 160.000,00 mEUR
+		await registerProperty();
 
-		// 1. Prodavatelj registrira nekretninu.
-		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty(
-				["Osijek", "9000/9", "Radićeva ulica 30, Osijek", documentHash],
-				{
-					account: seller.account,
-				},
-			);
+		await submitAllRequiredDocuments(1n);
 
-		await publicClient.waitForTransactionReceipt({
-			hash: registerTransactionHash,
-		});
+		/*
+		 * Namjerno potvrđujemo samo 2/3 dokumenta.
+		 */
+		await verifyDocument(1n, DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT);
 
-		// 2. Verifikator potvrđuje nekretninu.
-		await verifyProperty(1n);
+		await verifyDocument(1n, DOCUMENT_TYPE.CADASTRAL_DOCUMENT);
 
-		// 3. Prodavatelj kreira prvu prodaju.
-		const createFirstSaleTransactionHash =
-			await realEstateEscrow.write.createSale([1n, firstPrice], {
-				account: seller.account,
-			});
-
-		await publicClient.waitForTransactionReceipt({
-			hash: createFirstSaleTransactionHash,
-		});
-
-		const saleBeforeCancellation = await realEstateEscrow.read.getSale([1n]);
-
-		console.log("\n--- OTKAZIVANJE PRODAJE ---");
-		console.log("Status prije otkazivanja:", saleBeforeCancellation.status);
-		console.log(
-			"Cijena prve prodaje:",
-			saleBeforeCancellation.price.toString(),
+		const hasAllDocuments = await propertyRegistry.read.hasAllRequiredDocuments(
+			[1n],
 		);
 
-		// 4. Prodavatelj otkazuje prodaju.
-		const cancelSaleTransactionHash = await realEstateEscrow.write.cancelSale(
-			[1n],
+		const hasValidDocuments = await propertyRegistry.read.hasValidDocuments([
+			1n,
+		]);
+
+		console.log("\n--- NEPOTPUNA VERIFIKACIJA ---");
+		console.log("Svi dokumenti predani:", hasAllDocuments);
+		console.log("Potvrđeno:", "2/3");
+		console.log("Dokumentacija valjana:", hasValidDocuments);
+		console.log("------------------------------\n");
+
+		assert.equal(
+			hasAllDocuments,
+			true,
+			"Sva tri dokumenta moraju biti predana",
+		);
+
+		assert.equal(
+			hasValidDocuments,
+			false,
+			"2/3 potvrđena dokumenta nisu dovoljna",
+		);
+
+		await assert.rejects(async () => {
+			await realEstateEscrow.write.createSale([1n, propertyPrice], {
+				account: seller.account,
+			});
+		});
+
+		const saleCount = await realEstateEscrow.read.getSaleCount();
+
+		assert.equal(
+			saleCount,
+			0n,
+			"Nekretnina bez kompletne valjane dokumentacije ne smije biti ponuđena na prodaju",
+		);
+	});
+
+	it("ne dopušta korisniku koji nije vlasnik nekretnine kreiranje prodaje", async function () {
+		const {
+			seller,
+			unauthorizedUser,
+			propertyRegistry,
+			realEstateEscrow,
+			prepareVerifiedProperty,
+		} = await createEscrowTestContext();
+
+		const propertyPrice = 15_000_000n;
+
+		await prepareVerifiedProperty();
+
+		const ownerBefore = await propertyRegistry.read.getDigitalOwner([1n]);
+
+		await assert.rejects(async () => {
+			await realEstateEscrow.write.createSale([1n, propertyPrice], {
+				account: unauthorizedUser.account,
+			});
+		});
+
+		const saleCount = await realEstateEscrow.read.getSaleCount();
+
+		const ownerAfter = await propertyRegistry.read.getDigitalOwner([1n]);
+
+		assert.equal(
+			saleCount,
+			0n,
+			"Neovlašteni korisnik ne smije kreirati prodaju",
+		);
+
+		assert.equal(
+			ownerBefore.toLowerCase(),
+			seller.account.address.toLowerCase(),
+		);
+
+		assert.equal(
+			ownerAfter.toLowerCase(),
+			seller.account.address.toLowerCase(),
+			"Vlasništvo se ne smije promijeniti",
+		);
+	});
+
+	it("ne dopušta dvije aktivne prodaje za istu nekretninu", async function () {
+		const { seller, publicClient, realEstateEscrow, prepareVerifiedProperty } =
+			await createEscrowTestContext();
+
+		await prepareVerifiedProperty();
+
+		const firstPrice = 15_000_000n;
+		const secondPrice = 16_000_000n;
+
+		const firstSaleHash = await realEstateEscrow.write.createSale(
+			[1n, firstPrice],
 			{
 				account: seller.account,
 			},
 		);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: cancelSaleTransactionHash,
+			hash: firstSaleHash,
+		});
+
+		await assert.rejects(async () => {
+			await realEstateEscrow.write.createSale([1n, secondPrice], {
+				account: seller.account,
+			});
+		});
+
+		const saleCount = await realEstateEscrow.read.getSaleCount();
+
+		const sale = await realEstateEscrow.read.getSale([1n]);
+
+		assert.equal(saleCount, 1n, "Mora postojati samo jedna aktivna prodaja");
+
+		assert.equal(sale.price, firstPrice);
+
+		assert.equal(sale.status, 0, "Prva prodaja mora ostati Created");
+	});
+
+	it("ne dopušta kreiranje prodaje s cijenom nula", async function () {
+		const { seller, realEstateEscrow, prepareVerifiedProperty } =
+			await createEscrowTestContext();
+
+		await prepareVerifiedProperty(
+			1n,
+			"Osijek",
+			"17000/17",
+			"Županijska ulica 17, Osijek",
+		);
+
+		let caughtError: unknown;
+
+		try {
+			await realEstateEscrow.write.createSale([1n, 0n], {
+				account: seller.account,
+			});
+		} catch (error) {
+			caughtError = error;
+		}
+
+		assert.ok(caughtError, "Pametni ugovor mora odbiti prodaju s cijenom nula");
+
+		const errorMessage =
+			caughtError instanceof Error ? caughtError.message : String(caughtError);
+
+		assert.match(
+			errorMessage,
+			/Cijena mora biti veca od nule/,
+			"Greška mora sadržavati razlog odbijanja",
+		);
+
+		const saleCount = await realEstateEscrow.read.getSaleCount();
+
+		console.log("\n--- CIJENA NULA ---");
+		console.log("Greška:", errorMessage);
+		console.log("-------------------\n");
+
+		assert.equal(saleCount, 0n);
+	});
+
+	it("prodavatelj otkazuje prodaju prije uplate i zatim može kreirati novu", async function () {
+		const { seller, publicClient, realEstateEscrow, prepareVerifiedProperty } =
+			await createEscrowTestContext();
+
+		await prepareVerifiedProperty(
+			1n,
+			"Osijek",
+			"9000/9",
+			"Radićeva ulica 30, Osijek",
+		);
+
+		const firstPrice = 15_000_000n;
+		const secondPrice = 16_000_000n;
+
+		const firstSaleHash = await realEstateEscrow.write.createSale(
+			[1n, firstPrice],
+			{
+				account: seller.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: firstSaleHash,
+		});
+
+		const cancelHash = await realEstateEscrow.write.cancelSale([1n], {
+			account: seller.account,
+		});
+
+		await publicClient.waitForTransactionReceipt({
+			hash: cancelHash,
 		});
 
 		const cancelledSale = await realEstateEscrow.read.getSale([1n]);
 
-		console.log("Status nakon otkazivanja:", cancelledSale.status);
+		assert.equal(cancelledSale.status, 3, "Prodaja mora biti Cancelled");
 
-		// 5. Za istu nekretninu kreira se nova prodaja.
-		const createSecondSaleTransactionHash =
-			await realEstateEscrow.write.createSale([1n, secondPrice], {
+		const secondSaleHash = await realEstateEscrow.write.createSale(
+			[1n, secondPrice],
+			{
 				account: seller.account,
-			});
+			},
+		);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: createSecondSaleTransactionHash,
+			hash: secondSaleHash,
 		});
 
-		const newSale = await realEstateEscrow.read.getSale([2n]);
+		const secondSale = await realEstateEscrow.read.getSale([2n]);
 
-		console.log("ID nove prodaje:", newSale.id.toString());
-		console.log("Cijena nove prodaje:", newSale.price.toString());
-		console.log("Status nove prodaje:", newSale.status);
-		console.log("---------------------------\n");
-
-		assert.equal(
-			saleBeforeCancellation.status,
-			0,
-			"Početni status prodaje mora biti Created",
-		);
-
-		assert.equal(
-			cancelledSale.status,
-			3,
-			"Status otkazane prodaje mora biti Cancelled",
-		);
-
-		assert.equal(newSale.id, 2n, "Nova prodaja mora imati ID 2");
-
-		assert.equal(
-			newSale.propertyId,
-			1n,
-			"Nova prodaja mora pripadati istoj nekretnini",
-		);
-
-		assert.equal(
-			newSale.price,
-			secondPrice,
-			"Nova prodaja mora imati novu cijenu",
-		);
-
-		assert.equal(newSale.status, 0, "Nova prodaja mora biti u statusu Created");
+		assert.equal(secondSale.id, 2n);
+		assert.equal(secondSale.propertyId, 1n);
+		assert.equal(secondSale.price, secondPrice);
+		assert.equal(secondSale.status, 0);
 	});
 
-	it("ne dopušta korisniku koji nije prodavatelj otkazivanje prodaje", async function () {
+	it("ne dopušta drugom korisniku otkazivanje prodaje", async function () {
 		const {
 			seller,
 			unauthorizedUser,
 			publicClient,
-			propertyRegistry,
 			realEstateEscrow,
-			verifyProperty,
+			prepareVerifiedProperty,
 		} = await createEscrowTestContext();
 
-		const documentHash =
-			"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+		await prepareVerifiedProperty();
 
-		const propertyPrice = 15_000_000n;
-
-		// 1. Prodavatelj registrira nekretninu.
-		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty(
-				[
-					"Osijek",
-					"10000/10",
-					"Strossmayerova ulica 100, Osijek",
-					documentHash,
-				],
-				{
-					account: seller.account,
-				},
-			);
+		const createSaleHash = await realEstateEscrow.write.createSale(
+			[1n, 15_000_000n],
+			{
+				account: seller.account,
+			},
+		);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: registerTransactionHash,
+			hash: createSaleHash,
 		});
 
-		// 2. Verifikator potvrđuje nekretninu.
-		await verifyProperty(1n);
+		await assert.rejects(async () => {
+			await realEstateEscrow.write.cancelSale([1n], {
+				account: unauthorizedUser.account,
+			});
+		});
 
-		// 3. Prodavatelj kreira prodaju.
-		const createSaleTransactionHash = await realEstateEscrow.write.createSale(
+		const sale = await realEstateEscrow.read.getSale([1n]);
+
+		assert.equal(sale.status, 0, "Prodaja mora ostati Created");
+
+		assert.equal(
+			sale.seller.toLowerCase(),
+			seller.account.address.toLowerCase(),
+		);
+	});
+
+	it("ne dopušta prodavatelju kupnju vlastite nekretnine", async function () {
+		const {
+			seller,
+			publicClient,
+			mockEUR,
+			realEstateEscrow,
+			prepareVerifiedProperty,
+		} = await createEscrowTestContext();
+
+		const sellerInitialBalance = 20_000_000n;
+		const propertyPrice = 15_000_000n;
+
+		await prepareVerifiedProperty();
+
+		const createSaleHash = await realEstateEscrow.write.createSale(
 			[1n, propertyPrice],
 			{
 				account: seller.account,
@@ -347,49 +612,51 @@ describe("RealEstateEscrow", function () {
 		);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: createSaleTransactionHash,
+			hash: createSaleHash,
 		});
 
-		const saleBeforeAttempt = await realEstateEscrow.read.getSale([1n]);
+		const mintHash = await mockEUR.write.mint([
+			seller.account.address,
+			sellerInitialBalance,
+		]);
 
-		console.log("\n--- NEOVLAŠTENO OTKAZIVANJE PRODAJE ---");
-		console.log("Prodavatelj:", seller.account.address);
-		console.log("Neovlašteni korisnik:", unauthorizedUser.account.address);
-		console.log("Status prije pokušaja:", saleBeforeAttempt.status);
+		await publicClient.waitForTransactionReceipt({
+			hash: mintHash,
+		});
 
-		// 4. Drugi korisnik pokušava otkazati prodaju.
+		const approveHash = await mockEUR.write.approve(
+			[realEstateEscrow.address, propertyPrice],
+			{
+				account: seller.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: approveHash,
+		});
+
 		await assert.rejects(async () => {
-			await realEstateEscrow.write.cancelSale([1n], {
-				account: unauthorizedUser.account,
+			await realEstateEscrow.write.fundSale([1n], {
+				account: seller.account,
 			});
 		});
 
-		const saleAfterAttempt = await realEstateEscrow.read.getSale([1n]);
+		const sale = await realEstateEscrow.read.getSale([1n]);
 
-		console.log("Pokušaj otkazivanja: odbijen");
-		console.log("Status nakon pokušaja:", saleAfterAttempt.status);
-		console.log("----------------------------------------\n");
+		const sellerBalance = await mockEUR.read.balanceOf([
+			seller.account.address,
+		]);
 
-		assert.equal(
-			saleBeforeAttempt.status,
-			0,
-			"Prodaja prije pokušaja mora biti u statusu Created",
-		);
+		assert.equal(sale.status, 0, "Prodaja mora ostati Created");
 
 		assert.equal(
-			saleAfterAttempt.status,
-			0,
-			"Prodaja nakon neovlaštenog pokušaja mora ostati Created",
-		);
-
-		assert.equal(
-			saleAfterAttempt.seller.toLowerCase(),
-			seller.account.address.toLowerCase(),
-			"Prodavatelj se ne smije promijeniti",
+			sellerBalance,
+			sellerInitialBalance,
+			"Prodavatelju se sredstva ne smiju oduzeti",
 		);
 	});
 
-	it("automatski završava kupoprodaju nakon uplate kupca", async function () {
+	it("odbija kupnju ako kupac nema dovoljno sredstava", async function () {
 		const {
 			seller,
 			buyer,
@@ -397,37 +664,18 @@ describe("RealEstateEscrow", function () {
 			propertyRegistry,
 			mockEUR,
 			realEstateEscrow,
-			verifyProperty,
 			grantTransferRoleToEscrow,
+			prepareVerifiedProperty,
 		} = await createEscrowTestContext();
 
-		const documentHash =
-			"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+		const propertyPrice = 15_000_000n;
+		const buyerBalance = 10_000_000n;
 
-		const buyerInitialBalance = 20_000_000n; // 200.000,00 mEUR
-		const propertyPrice = 15_000_000n; // 150.000,00 mEUR
+		await prepareVerifiedProperty();
 
-		// 1. Prodavatelj registrira nekretninu.
-		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty(
-				["Osijek", "8000/8", "Divaltova ulica 80, Osijek", documentHash],
-				{
-					account: seller.account,
-				},
-			);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: registerTransactionHash,
-		});
-
-		// 2. Verifikator potvrđuje nekretninu.
-		await verifyProperty(1n);
-
-		// 3. Escrow ugovor dobiva TRANSFER_ROLE.
 		await grantTransferRoleToEscrow();
 
-		// 4. Prodavatelj kreira prodaju.
-		const createSaleTransactionHash = await realEstateEscrow.write.createSale(
+		const createSaleHash = await realEstateEscrow.write.createSale(
 			[1n, propertyPrice],
 			{
 				account: seller.account,
@@ -435,21 +683,27 @@ describe("RealEstateEscrow", function () {
 		);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: createSaleTransactionHash,
+			hash: createSaleHash,
 		});
 
-		// 5. Kupcu se dodjeljuju mEUR tokeni.
-		const mintTransactionHash = await mockEUR.write.mint([
+		/*
+		 * Kupac ima samo 100.000 mEUR,
+		 * a nekretnina košta 150.000 mEUR.
+		 */
+		const mintHash = await mockEUR.write.mint([
 			buyer.account.address,
-			buyerInitialBalance,
+			buyerBalance,
 		]);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: mintTransactionHash,
+			hash: mintHash,
 		});
 
-		// 6. Kupac odobrava escrowu korištenje sredstava.
-		const approveTransactionHash = await mockEUR.write.approve(
+		/*
+		 * Namjerno odobravamo dovoljan allowance kako bismo
+		 * dokazali da transakcija pada konkretno zbog salda.
+		 */
+		const approveHash = await mockEUR.write.approve(
 			[realEstateEscrow.address, propertyPrice],
 			{
 				account: buyer.account,
@@ -457,88 +711,561 @@ describe("RealEstateEscrow", function () {
 		);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: approveTransactionHash,
+			hash: approveHash,
 		});
 
-		const propertyBeforePurchase = await propertyRegistry.read.getProperty([
-			1n,
+		let caughtError: unknown;
+
+		try {
+			await realEstateEscrow.write.fundSale([1n], {
+				account: buyer.account,
+			});
+		} catch (error) {
+			caughtError = error;
+		}
+
+		assert.ok(
+			caughtError,
+			"Pametni ugovor mora odbiti kupnju ako kupac nema dovoljno sredstava",
+		);
+
+		const errorMessage =
+			caughtError instanceof Error ? caughtError.message : String(caughtError);
+
+		assert.match(
+			errorMessage,
+			/Kupac nema dovoljno sredstava/,
+			"Mora se vratiti eksplicitna greška za nedovoljan saldo kupca",
+		);
+
+		const sale = await realEstateEscrow.read.getSale([1n]);
+
+		const buyerBalanceAfter = await mockEUR.read.balanceOf([
+			buyer.account.address,
 		]);
 
-		console.log("\n--- AUTOMATSKA KUPOPRODAJA ---");
-		console.log("Vlasnik prije kupnje:", propertyBeforePurchase.digitalOwner);
-		console.log("Stanje kupca prije kupnje:", buyerInitialBalance.toString());
+		const sellerBalanceAfter = await mockEUR.read.balanceOf([
+			seller.account.address,
+		]);
 
-		// 7. Kupac polaže sredstva.
-		// Unutar iste transakcije automatski se izvršavaju:
-		// prijenos vlasništva i isplata prodavatelja.
-		const fundSaleTransactionHash = await realEstateEscrow.write.fundSale(
-			[1n],
+		const escrowBalanceAfter = await mockEUR.read.balanceOf([
+			realEstateEscrow.address,
+		]);
+
+		const ownerAfter = await propertyRegistry.read.getDigitalOwner([1n]);
+
+		console.log("\n--- NEDOVOLJNA SREDSTVA ---");
+		console.log("Cijena:", propertyPrice.toString());
+		console.log("Saldo kupca:", buyerBalance.toString());
+		console.log("Greška:", errorMessage);
+		console.log("----------------------------\n");
+
+		assert.equal(sale.status, 0);
+
+		assert.equal(
+			buyerBalanceAfter,
+			buyerBalance,
+			"Kupcu se sredstva ne smiju oduzeti",
+		);
+
+		assert.equal(sellerBalanceAfter, 0n);
+
+		assert.equal(escrowBalanceAfter, 0n);
+
+		assert.equal(
+			ownerAfter.toLowerCase(),
+			seller.account.address.toLowerCase(),
+			"Prodavatelj mora ostati vlasnik",
+		);
+	});
+
+	it("odbija kupnju ako kupac nije odobrio escrowu korištenje sredstava", async function () {
+		const {
+			seller,
+			buyer,
+			publicClient,
+			mockEUR,
+			realEstateEscrow,
+			grantTransferRoleToEscrow,
+			prepareVerifiedProperty,
+		} = await createEscrowTestContext();
+
+		const propertyPrice = 15_000_000n;
+		const buyerBalance = 20_000_000n;
+
+		await prepareVerifiedProperty();
+
+		await grantTransferRoleToEscrow();
+
+		const createSaleHash = await realEstateEscrow.write.createSale(
+			[1n, propertyPrice],
+			{
+				account: seller.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: createSaleHash,
+		});
+
+		const mintHash = await mockEUR.write.mint([
+			buyer.account.address,
+			buyerBalance,
+		]);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: mintHash,
+		});
+
+		/*
+		 * Nema approve poziva.
+		 * Allowance mora ostati 0.
+		 */
+		const allowanceBefore = await mockEUR.read.allowance([
+			buyer.account.address,
+			realEstateEscrow.address,
+		]);
+
+		assert.equal(allowanceBefore, 0n);
+
+		let caughtError: unknown;
+
+		try {
+			await realEstateEscrow.write.fundSale([1n], {
+				account: buyer.account,
+			});
+		} catch (error) {
+			caughtError = error;
+		}
+
+		assert.ok(caughtError, "Pametni ugovor mora odbiti kupnju bez allowancea");
+
+		const errorMessage =
+			caughtError instanceof Error ? caughtError.message : String(caughtError);
+
+		assert.match(
+			errorMessage,
+			/Kupac nije odobrio dovoljan iznos sredstava/,
+			"Mora se vratiti eksplicitna greška za allowance",
+		);
+
+		const sale = await realEstateEscrow.read.getSale([1n]);
+
+		const buyerBalanceAfter = await mockEUR.read.balanceOf([
+			buyer.account.address,
+		]);
+
+		const escrowBalanceAfter = await mockEUR.read.balanceOf([
+			realEstateEscrow.address,
+		]);
+
+		console.log("\n--- NEMA ALLOWANCEA ---");
+		console.log("Saldo kupca:", buyerBalance.toString());
+		console.log("Allowance:", allowanceBefore.toString());
+		console.log("Greška:", errorMessage);
+		console.log("----------------------\n");
+
+		assert.equal(sale.status, 0);
+
+		assert.equal(buyerBalanceAfter, buyerBalance);
+
+		assert.equal(escrowBalanceAfter, 0n);
+	});
+
+	it("odbija kupnju ako je allowance manji od prodajne cijene", async function () {
+		const {
+			seller,
+			buyer,
+			publicClient,
+			mockEUR,
+			realEstateEscrow,
+			grantTransferRoleToEscrow,
+			prepareVerifiedProperty,
+		} = await createEscrowTestContext();
+
+		const propertyPrice = 15_000_000n;
+		const buyerInitialBalance = 20_000_000n;
+		const approvedAmount = 10_000_000n;
+
+		await prepareVerifiedProperty();
+
+		await grantTransferRoleToEscrow();
+
+		const createSaleHash = await realEstateEscrow.write.createSale(
+			[1n, propertyPrice],
+			{
+				account: seller.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: createSaleHash,
+		});
+
+		const mintHash = await mockEUR.write.mint([
+			buyer.account.address,
+			buyerInitialBalance,
+		]);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: mintHash,
+		});
+
+		const approveHash = await mockEUR.write.approve(
+			[realEstateEscrow.address, approvedAmount],
 			{
 				account: buyer.account,
 			},
 		);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: fundSaleTransactionHash,
+			hash: approveHash,
 		});
 
-		const completedSale = await realEstateEscrow.read.getSale([1n]);
+		let caughtError: unknown;
 
-		const propertyAfterPurchase = await propertyRegistry.read.getProperty([1n]);
+		try {
+			await realEstateEscrow.write.fundSale([1n], {
+				account: buyer.account,
+			});
+		} catch (error) {
+			caughtError = error;
+		}
 
-		const buyerBalance = await mockEUR.read.balanceOf([buyer.account.address]);
+		assert.ok(caughtError);
 
-		const sellerBalance = await mockEUR.read.balanceOf([
-			seller.account.address,
+		const errorMessage =
+			caughtError instanceof Error ? caughtError.message : String(caughtError);
+
+		assert.match(errorMessage, /Kupac nije odobrio dovoljan iznos sredstava/);
+
+		const buyerBalanceAfter = await mockEUR.read.balanceOf([
+			buyer.account.address,
 		]);
 
-		const escrowBalance = await mockEUR.read.balanceOf([
+		const allowanceAfter = await mockEUR.read.allowance([
+			buyer.account.address,
 			realEstateEscrow.address,
 		]);
 
-		console.log("Vlasnik nakon kupnje:", propertyAfterPurchase.digitalOwner);
-		console.log("Stanje kupca nakon kupnje:", buyerBalance.toString());
-		console.log("Stanje prodavatelja:", sellerBalance.toString());
-		console.log("Stanje escrow ugovora:", escrowBalance.toString());
+		assert.equal(
+			buyerBalanceAfter,
+			buyerInitialBalance,
+			"Kupcu se tokeni ne smiju oduzeti",
+		);
+
+		assert.equal(
+			allowanceAfter,
+			approvedAmount,
+			"Premali allowance ne smije biti potrošen",
+		);
+	});
+
+	it("automatski završava kupoprodaju kada su svi uvjeti ispunjeni", async function () {
+		const {
+			seller,
+			buyer,
+			publicClient,
+			propertyRegistry,
+			mockEUR,
+			realEstateEscrow,
+			grantTransferRoleToEscrow,
+			prepareVerifiedProperty,
+		} = await createEscrowTestContext();
+
+		const buyerInitialBalance = 20_000_000n;
+		const propertyPrice = 15_000_000n;
+
+		/* ==================================================
+		   1. VALJANA DOKUMENTACIJA
+		   ================================================== */
+
+		await prepareVerifiedProperty(
+			1n,
+			"Osijek",
+			"8000/8",
+			"Divaltova ulica 80, Osijek",
+		);
+
+		const hasValidDocuments = await propertyRegistry.read.hasValidDocuments([
+			1n,
+		]);
+
+		assert.equal(
+			hasValidDocuments,
+			true,
+			"Sva dokumentacija mora biti potvrđena",
+		);
+
+		/* ==================================================
+		   2. ESCROW DOBIVA TRANSFER_ROLE
+		   ================================================== */
+
+		await grantTransferRoleToEscrow();
+
+		/* ==================================================
+		   3. PRODAVATELJ KREIRA PRODAJU
+		   ================================================== */
+
+		const createSaleHash = await realEstateEscrow.write.createSale(
+			[1n, propertyPrice],
+			{
+				account: seller.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: createSaleHash,
+		});
+
+		/* ==================================================
+		   4. KUPAC DOBIVA SREDSTVA
+		   ================================================== */
+
+		const mintHash = await mockEUR.write.mint([
+			buyer.account.address,
+			buyerInitialBalance,
+		]);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: mintHash,
+		});
+
+		const buyerBalanceBefore = await mockEUR.read.balanceOf([
+			buyer.account.address,
+		]);
+
+		assert.equal(
+			buyerBalanceBefore >= propertyPrice,
+			true,
+			"Kupac mora imati dovoljno sredstava",
+		);
+
+		/* ==================================================
+		   5. KUPAC ODOBRAVA ESCROW
+		   ================================================== */
+
+		const approveHash = await mockEUR.write.approve(
+			[realEstateEscrow.address, propertyPrice],
+			{
+				account: buyer.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: approveHash,
+		});
+
+		const allowanceBefore = await mockEUR.read.allowance([
+			buyer.account.address,
+			realEstateEscrow.address,
+		]);
+
+		assert.equal(
+			allowanceBefore >= propertyPrice,
+			true,
+			"Allowance mora biti dovoljan",
+		);
+
+		/* ==================================================
+		   6. STANJE PRIJE KUPOPRODAJE
+		   ================================================== */
+
+		const ownerBefore = await propertyRegistry.read.getDigitalOwner([1n]);
+
+		assert.equal(
+			ownerBefore.toLowerCase(),
+			seller.account.address.toLowerCase(),
+			"Prodavatelj mora biti vlasnik prije kupnje",
+		);
+
+		console.log("\n--- UVJETI PRIJE KUPOPRODAJE ---");
+		console.log("Dokumentacija valjana:", hasValidDocuments);
+		console.log("Prodavatelj je vlasnik:", true);
+		console.log(
+			"Kupac ima dovoljno sredstava:",
+			buyerBalanceBefore >= propertyPrice,
+		);
+		console.log("Allowance dovoljan:", allowanceBefore >= propertyPrice);
+		console.log("--------------------------------\n");
+
+		/* ==================================================
+		   7. AUTOMATSKO IZVRŠENJE
+		   ================================================== */
+
+		const fundSaleHash = await realEstateEscrow.write.fundSale([1n], {
+			account: buyer.account,
+		});
+
+		await publicClient.waitForTransactionReceipt({
+			hash: fundSaleHash,
+		});
+
+		/* ==================================================
+		   8. PROVJERA REZULTATA
+		   ================================================== */
+
+		const completedSale = await realEstateEscrow.read.getSale([1n]);
+
+		const ownerAfter = await propertyRegistry.read.getDigitalOwner([1n]);
+
+		const buyerBalanceAfter = await mockEUR.read.balanceOf([
+			buyer.account.address,
+		]);
+
+		const sellerBalanceAfter = await mockEUR.read.balanceOf([
+			seller.account.address,
+		]);
+
+		const escrowBalanceAfter = await mockEUR.read.balanceOf([
+			realEstateEscrow.address,
+		]);
+
+		console.log("\n--- AUTOMATSKA KUPOPRODAJA ---");
+		console.log("Vlasnik prije:", ownerBefore);
+		console.log("Vlasnik nakon:", ownerAfter);
+		console.log("Stanje kupca:", buyerBalanceAfter.toString());
+		console.log("Stanje prodavatelja:", sellerBalanceAfter.toString());
+		console.log("Stanje escrowa:", escrowBalanceAfter.toString());
 		console.log("Status prodaje:", completedSale.status);
 		console.log("-----------------------------\n");
 
 		assert.equal(
-			propertyBeforePurchase.digitalOwner.toLowerCase(),
-			seller.account.address.toLowerCase(),
-			"Prodavatelj prije kupnje mora biti vlasnik",
-		);
-
-		assert.equal(
-			propertyAfterPurchase.digitalOwner.toLowerCase(),
-			buyer.account.address.toLowerCase(),
-			"Kupac mora postati novi digitalni vlasnik",
+			completedSale.status,
+			2,
+			"Prodaja mora automatski prijeći u Completed",
 		);
 
 		assert.equal(
 			completedSale.buyer.toLowerCase(),
 			buyer.account.address.toLowerCase(),
-			"Adresa kupca mora biti spremljena u prodaji",
 		);
 
 		assert.equal(
-			completedSale.status,
-			2,
-			"Prodaja mora automatski prijeći u status Completed",
+			ownerAfter.toLowerCase(),
+			buyer.account.address.toLowerCase(),
+			"Kupac mora postati novi digitalni vlasnik",
 		);
 
-		assert.equal(buyerBalance, 5_000_000n, "Kupcu mora ostati 50.000,00 mEUR");
+		assert.equal(
+			buyerBalanceAfter,
+			5_000_000n,
+			"Kupcu mora ostati 50.000,00 mEUR",
+		);
 
 		assert.equal(
-			sellerBalance,
+			sellerBalanceAfter,
 			propertyPrice,
-			"Prodavatelj mora primiti 150.000,00 mEUR",
+			"Prodavatelj mora primiti puni iznos",
 		);
 
 		assert.equal(
-			escrowBalance,
+			escrowBalanceAfter,
 			0n,
-			"Escrow nakon završetka ne smije zadržati sredstva",
+			"Escrow nakon automatskog završetka ne smije zadržati sredstva",
+		);
+	});
+
+	it("poništava cijelu transakciju ako escrow nema TRANSFER_ROLE", async function () {
+		const {
+			seller,
+			buyer,
+			publicClient,
+			propertyRegistry,
+			mockEUR,
+			realEstateEscrow,
+			prepareVerifiedProperty,
+		} = await createEscrowTestContext();
+
+		const buyerInitialBalance = 20_000_000n;
+		const propertyPrice = 15_000_000n;
+
+		await prepareVerifiedProperty();
+
+		/*
+		 * Namjerno NE pozivamo grantTransferRoleToEscrow().
+		 */
+
+		const createSaleHash = await realEstateEscrow.write.createSale(
+			[1n, propertyPrice],
+			{
+				account: seller.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: createSaleHash,
+		});
+
+		const mintHash = await mockEUR.write.mint([
+			buyer.account.address,
+			buyerInitialBalance,
+		]);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: mintHash,
+		});
+
+		const approveHash = await mockEUR.write.approve(
+			[realEstateEscrow.address, propertyPrice],
+			{
+				account: buyer.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: approveHash,
+		});
+
+		const ownerBefore = await propertyRegistry.read.getDigitalOwner([1n]);
+
+		await assert.rejects(async () => {
+			await realEstateEscrow.write.fundSale([1n], {
+				account: buyer.account,
+			});
+		});
+
+		const saleAfter = await realEstateEscrow.read.getSale([1n]);
+
+		const ownerAfter = await propertyRegistry.read.getDigitalOwner([1n]);
+
+		const buyerBalanceAfter = await mockEUR.read.balanceOf([
+			buyer.account.address,
+		]);
+
+		const sellerBalanceAfter = await mockEUR.read.balanceOf([
+			seller.account.address,
+		]);
+
+		const escrowBalanceAfter = await mockEUR.read.balanceOf([
+			realEstateEscrow.address,
+		]);
+
+		console.log("\n--- ATOMSKO PONIŠTAVANJE ---");
+		console.log("Status nakon greške:", saleAfter.status);
+		console.log("Saldo kupca:", buyerBalanceAfter.toString());
+		console.log("Saldo prodavatelja:", sellerBalanceAfter.toString());
+		console.log("Saldo escrowa:", escrowBalanceAfter.toString());
+		console.log("-----------------------------\n");
+
+		assert.equal(saleAfter.status, 0, "Status se mora vratiti na Created");
+
+		assert.equal(saleAfter.buyer, "0x0000000000000000000000000000000000000000");
+
+		assert.equal(
+			buyerBalanceAfter,
+			buyerInitialBalance,
+			"Kupac mora zadržati sva sredstva",
+		);
+
+		assert.equal(sellerBalanceAfter, 0n);
+
+		assert.equal(escrowBalanceAfter, 0n, "Escrow ne smije zadržati sredstva");
+
+		assert.equal(
+			ownerBefore.toLowerCase(),
+			ownerAfter.toLowerCase(),
+			"Vlasništvo se ne smije promijeniti",
 		);
 	});
 
@@ -546,48 +1273,26 @@ describe("RealEstateEscrow", function () {
 		const {
 			seller,
 			publicClient,
-			propertyRegistry,
 			realEstateEscrow,
-			verifyProperty,
+			registerProperty,
+			submitAllRequiredDocuments,
+			verifyAllRequiredDocuments,
 		} = await createEscrowTestContext();
 
-		const firstDocumentHash =
-			"0x1111111111111111111111111111111111111111111111111111111111111111";
+		/* Prva nekretnina */
 
-		const secondDocumentHash =
-			"0x2222222222222222222222222222222222222222222222222222222222222222";
+		await registerProperty("Osijek", "12000/12", "Prva ulica 1, Osijek");
 
-		// Registracija prve nekretnine.
-		const firstRegisterHash = await propertyRegistry.write.registerProperty(
-			["Osijek", "12000/12", "Prva ulica 1, Osijek", firstDocumentHash],
-			{
-				account: seller.account,
-			},
-		);
+		await submitAllRequiredDocuments(1n);
+		await verifyAllRequiredDocuments(1n);
 
-		await publicClient.waitForTransactionReceipt({
-			hash: firstRegisterHash,
-		});
+		/* Druga nekretnina */
 
-		// Registracija druge nekretnine.
-		const secondRegisterHash = await propertyRegistry.write.registerProperty(
-			["Osijek", "13000/13", "Druga ulica 2, Osijek", secondDocumentHash],
-			{
-				account: seller.account,
-			},
-		);
+		await registerProperty("Osijek", "13000/13", "Druga ulica 2, Osijek");
 
-		await publicClient.waitForTransactionReceipt({
-			hash: secondRegisterHash,
-		});
+		await submitAllRequiredDocuments(2n);
+		await verifyAllRequiredDocuments(2n);
 
-		// Potvrda prve nekretnine.
-		await verifyProperty(1n);
-
-		// Potvrda druge nekretnine.
-		await verifyProperty(2n);
-
-		// Kreiranje prve prodaje.
 		const firstSaleHash = await realEstateEscrow.write.createSale(
 			[1n, 15_000_000n],
 			{
@@ -599,7 +1304,6 @@ describe("RealEstateEscrow", function () {
 			hash: firstSaleHash,
 		});
 
-		// Kreiranje druge prodaje.
 		const secondSaleHash = await realEstateEscrow.write.createSale(
 			[2n, 20_000_000n],
 			{
@@ -613,10 +1317,6 @@ describe("RealEstateEscrow", function () {
 
 		const saleCount = await realEstateEscrow.read.getSaleCount();
 
-		console.log("\n--- BROJ PRODAJA ---");
-		console.log("Ukupan broj kreiranih prodaja:", saleCount.toString());
-		console.log("--------------------\n");
-
 		assert.equal(
 			saleCount,
 			2n,
@@ -624,336 +1324,63 @@ describe("RealEstateEscrow", function () {
 		);
 	});
 
-	it("ne dopušta korisniku koji nije vlasnik nekretnine kreiranje prodaje", async function () {
-		const {
-			seller,
-			unauthorizedUser,
-			publicClient,
-			propertyRegistry,
-			realEstateEscrow,
-			verifyProperty,
-		} = await createEscrowTestContext();
+	it("vraća neispunjene uvjete za prodaju koja ne postoji", async function () {
+		const { buyer, realEstateEscrow } = await createEscrowTestContext();
 
-		const documentHash =
-			"0x3333333333333333333333333333333333333333333333333333333333333333";
+		const conditions = await realEstateEscrow.read.getPurchaseConditions([
+			999n,
+			buyer.account.address,
+		]);
 
-		const propertyPrice = 15_000_000n;
-
-		// 1. Prodavatelj registrira nekretninu.
-		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty(
-				[
-					"Osijek",
-					"14000/14",
-					"Vijenac Ivana Meštrovića 14, Osijek",
-					documentHash,
-				],
-				{
-					account: seller.account,
-				},
-			);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: registerTransactionHash,
-		});
-
-		// 2. Verifikator potvrđuje nekretninu.
-		await verifyProperty(1n);
-
-		const currentOwner = await propertyRegistry.read.getDigitalOwner([1n]);
-
-		console.log("\n--- NEOVLAŠTENO KREIRANJE PRODAJE ---");
-		console.log("Vlasnik nekretnine:", currentOwner);
-		console.log("Neovlašteni korisnik:", unauthorizedUser.account.address);
-
-		// 3. Korisnik koji nije vlasnik pokušava kreirati prodaju.
-		await assert.rejects(async () => {
-			await realEstateEscrow.write.createSale([1n, propertyPrice], {
-				account: unauthorizedUser.account,
-			});
-		});
-
-		const saleCount = await realEstateEscrow.read.getSaleCount();
-
-		const ownerAfterAttempt = await propertyRegistry.read.getDigitalOwner([1n]);
-
-		console.log("Pokušaj kreiranja prodaje: odbijen");
-		console.log("Broj prodaja nakon pokušaja:", saleCount.toString());
-		console.log("Vlasnik nakon pokušaja:", ownerAfterAttempt);
-		console.log("---------------------------------------\n");
-
-		assert.equal(
-			saleCount,
-			0n,
-			"Neovlašteni pokušaj ne smije kreirati prodaju",
-		);
-
-		assert.equal(
-			ownerAfterAttempt.toLowerCase(),
-			seller.account.address.toLowerCase(),
-			"Digitalni vlasnik mora ostati nepromijenjen",
-		);
-	});
-
-	it("ne dopušta kreiranje prodaje za nepotvrđenu nekretninu", async function () {
-		const { seller, publicClient, propertyRegistry, realEstateEscrow } =
-			await createEscrowTestContext();
-
-		const documentHash =
-			"0x4444444444444444444444444444444444444444444444444444444444444444";
-
-		const propertyPrice = 15_000_000n;
-
-		// Prodavatelj registrira nekretninu, ali je verifikator ne potvrđuje.
-		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty(
-				["Osijek", "15000/15", "Kačićeva ulica 15, Osijek", documentHash],
-				{
-					account: seller.account,
-				},
-			);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: registerTransactionHash,
-		});
-
-		const propertyBeforeAttempt = await propertyRegistry.read.getProperty([1n]);
-
-		console.log("\n--- PRODAJA NEPOTVRĐENE NEKRETNINE ---");
-		console.log("Status nekretnine:", propertyBeforeAttempt.verificationStatus);
-		console.log("Digitalni vlasnik:", propertyBeforeAttempt.digitalOwner);
-
-		await assert.rejects(async () => {
-			await realEstateEscrow.write.createSale([1n, propertyPrice], {
-				account: seller.account,
-			});
-		});
-
-		const saleCount = await realEstateEscrow.read.getSaleCount();
-
-		const propertyAfterAttempt = await propertyRegistry.read.getProperty([1n]);
-
-		console.log("Pokušaj kreiranja prodaje: odbijen");
-		console.log("Broj prodaja nakon pokušaja:", saleCount.toString());
+		console.log("\n--- NEPOSTOJEĆA PRODAJA ---");
+		console.log("Prodaja postoji:", conditions.saleExists);
+		console.log("Prodaja aktivna:", conditions.saleActive);
+		console.log("Dokumentacija valjana:", conditions.documentsValid);
+		console.log("Prodavatelj je vlasnik:", conditions.sellerIsOwner);
+		console.log("Kupac nije prodavatelj:", conditions.buyerIsNotSeller);
 		console.log(
-			"Status nekretnine nakon pokušaja:",
-			propertyAfterAttempt.verificationStatus,
+			"Kupac ima dovoljno sredstava:",
+			conditions.buyerHasSufficientBalance,
 		);
-		console.log("---------------------------------------\n");
+		console.log("Allowance dovoljan:", conditions.buyerHasSufficientAllowance);
+		console.log("Spremno za kupoprodaju:", conditions.readyForPurchase);
+		console.log("----------------------------\n");
+
+		assert.equal(conditions.saleExists, false);
+
+		assert.equal(conditions.saleActive, false);
+
+		assert.equal(conditions.documentsValid, false);
+
+		assert.equal(conditions.sellerIsOwner, false);
+
+		assert.equal(conditions.buyerIsNotSeller, false);
+
+		assert.equal(conditions.buyerHasSufficientBalance, false);
+
+		assert.equal(conditions.buyerHasSufficientAllowance, false);
 
 		assert.equal(
-			propertyBeforeAttempt.verificationStatus,
-			0,
-			"Nekretnina mora biti u statusu Pending",
-		);
-
-		assert.equal(
-			saleCount,
-			0n,
-			"Nepotvrđena nekretnina ne smije dobiti prodaju",
-		);
-
-		assert.equal(
-			propertyAfterAttempt.verificationStatus,
-			0,
-			"Status nekretnine mora ostati Pending",
+			conditions.readyForPurchase,
+			false,
+			"Nepostojeća prodaja ne može biti spremna za kupoprodaju",
 		);
 	});
 
-	it("ne dopušta dvije aktivne prodaje za istu nekretninu", async function () {
-		const {
-			seller,
-			publicClient,
-			propertyRegistry,
-			realEstateEscrow,
-			verifyProperty,
-		} = await createEscrowTestContext();
-
-		const documentHash =
-			"0x5555555555555555555555555555555555555555555555555555555555555555";
-
-		const firstPrice = 15_000_000n;
-		const secondPrice = 16_000_000n;
-
-		// 1. Prodavatelj registrira nekretninu.
-		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty(
-				[
-					"Osijek",
-					"16000/16",
-					"Ulica Hrvatske Republike 16, Osijek",
-					documentHash,
-				],
-				{
-					account: seller.account,
-				},
-			);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: registerTransactionHash,
-		});
-
-		// 2. Verifikator potvrđuje nekretninu.
-		await verifyProperty(1n);
-
-		// 3. Prodavatelj kreira prvu prodaju.
-		const firstSaleTransactionHash = await realEstateEscrow.write.createSale(
-			[1n, firstPrice],
-			{
-				account: seller.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: firstSaleTransactionHash,
-		});
-
-		const firstSale = await realEstateEscrow.read.getSale([1n]);
-
-		console.log("\n--- DVOSTRUKA AKTIVNA PRODAJA ---");
-		console.log("ID prve prodaje:", firstSale.id.toString());
-		console.log("Cijena prve prodaje:", firstSale.price.toString());
-		console.log("Status prve prodaje:", firstSale.status);
-
-		// 4. Pokušaj kreiranja druge aktivne prodaje
-		// za istu nekretninu.
-		await assert.rejects(async () => {
-			await realEstateEscrow.write.createSale([1n, secondPrice], {
-				account: seller.account,
-			});
-		});
-
-		const saleCount = await realEstateEscrow.read.getSaleCount();
-
-		const firstSaleAfterAttempt = await realEstateEscrow.read.getSale([1n]);
-
-		console.log("Druga aktivna prodaja: odbijena");
-		console.log("Ukupan broj prodaja:", saleCount.toString());
-		console.log(
-			"Status prve prodaje nakon pokušaja:",
-			firstSaleAfterAttempt.status,
-		);
-		console.log("--------------------------------\n");
-
-		assert.equal(saleCount, 1n, "Mora postojati samo jedna prodaja");
-
-		assert.equal(
-			firstSaleAfterAttempt.price,
-			firstPrice,
-			"Cijena prve prodaje ne smije se promijeniti",
-		);
-
-		assert.equal(
-			firstSaleAfterAttempt.status,
-			0,
-			"Prva prodaja mora ostati u statusu Created",
-		);
-	});
-
-	it("ne dopušta kreiranje prodaje s cijenom nula", async function () {
-		const {
-			seller,
-			publicClient,
-			propertyRegistry,
-			realEstateEscrow,
-			verifyProperty,
-		} = await createEscrowTestContext();
-
-		const documentHash =
-			"0x6666666666666666666666666666666666666666666666666666666666666666";
-
-		// Prodavatelj registrira nekretninu.
-		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty(
-				["Osijek", "17000/17", "Županijska ulica 17, Osijek", documentHash],
-				{
-					account: seller.account,
-				},
-			);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: registerTransactionHash,
-		});
-
-		// Verifikator potvrđuje nekretninu.
-		await verifyProperty(1n);
-
-		console.log("\n--- PRODAJA S CIJENOM NULA ---");
-		console.log("Pokušaj kreiranja prodaje s cijenom:", 0);
-
-		let caughtError: unknown;
-
-		try {
-			await realEstateEscrow.write.createSale([1n, 0n], {
-				account: seller.account,
-			});
-		} catch (error) {
-			caughtError = error;
-		}
-
-		// Provjerava da je pametni ugovor stvarno odbio transakciju.
-		assert.ok(caughtError, "Pametni ugovor mora odbiti prodaju s cijenom nula");
-
-		const errorMessage =
-			caughtError instanceof Error ? caughtError.message : String(caughtError);
-
-		// Provjerava stvarni razlog odbijanja koji je vratio ugovor.
-		assert.match(
-			errorMessage,
-			/Cijena mora biti veca od nule/,
-			"Greška mora sadržavati očekivani razlog odbijanja",
-		);
-
-		const saleCount = await realEstateEscrow.read.getSaleCount();
-
-		console.log("Stvarna poruka greške ugovora:", errorMessage);
-		console.log("Ukupan broj prodaja nakon pokušaja:", saleCount.toString());
-		console.log("--------------------------------\n");
-
-		assert.equal(
-			saleCount,
-			0n,
-			"Prodaja s cijenom nula ne smije biti kreirana",
-		);
-	});
-
-	it("poništava cijelu kupoprodaju ako escrow nema transfer ulogu", async function () {
+	it("prikazuje da dokumentacija i vlasništvo zadovoljavaju uvjete, ali kupac nema sredstva", async function () {
 		const {
 			seller,
 			buyer,
 			publicClient,
-			propertyRegistry,
-			mockEUR,
 			realEstateEscrow,
-			verifyProperty,
+			prepareVerifiedProperty,
 		} = await createEscrowTestContext();
 
-		const documentHash =
-			"0x7777777777777777777777777777777777777777777777777777777777777777";
-
-		const buyerInitialBalance = 20_000_000n;
 		const propertyPrice = 15_000_000n;
 
-		// 1. Prodavatelj registrira nekretninu.
-		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty(
-				["Osijek", "18000/18", "Vukovarska cesta 18, Osijek", documentHash],
-				{
-					account: seller.account,
-				},
-			);
+		await prepareVerifiedProperty();
 
-		await publicClient.waitForTransactionReceipt({
-			hash: registerTransactionHash,
-		});
-
-		// 2. Verifikator potvrđuje nekretninu.
-		await verifyProperty(1n);
-
-		// Namjerno ne dodjeljujemo TRANSFER_ROLE escrow ugovoru.
-
-		// 3. Prodavatelj kreira prodaju.
-		const createSaleTransactionHash = await realEstateEscrow.write.createSale(
+		const createSaleHash = await realEstateEscrow.write.createSale(
 			[1n, propertyPrice],
 			{
 				account: seller.account,
@@ -961,151 +1388,69 @@ describe("RealEstateEscrow", function () {
 		);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: createSaleTransactionHash,
+			hash: createSaleHash,
 		});
 
-		// 4. Kupcu se dodjeljuju tokeni.
-		const mintTransactionHash = await mockEUR.write.mint([
-			buyer.account.address,
-			buyerInitialBalance,
-		]);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: mintTransactionHash,
-		});
-
-		// 5. Kupac odobrava escrowu korištenje tokena.
-		const approveTransactionHash = await mockEUR.write.approve(
-			[realEstateEscrow.address, propertyPrice],
-			{
-				account: buyer.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: approveTransactionHash,
-		});
-
-		const ownerBeforeAttempt = await propertyRegistry.read.getDigitalOwner([
+		const conditions = await realEstateEscrow.read.getPurchaseConditions([
 			1n,
-		]);
-
-		const buyerBalanceBeforeAttempt = await mockEUR.read.balanceOf([
 			buyer.account.address,
 		]);
 
-		console.log("\n--- PONIŠTAVANJE NEUSPJEŠNE KUPOPRODAJE ---");
-		console.log("Vlasnik prije pokušaja:", ownerBeforeAttempt);
+		console.log("\n--- UVJETI BEZ SREDSTAVA ---");
+		console.log("Prodaja postoji:", conditions.saleExists);
+		console.log("Prodaja aktivna:", conditions.saleActive);
+		console.log("Dokumentacija valjana:", conditions.documentsValid);
+		console.log("Prodavatelj je vlasnik:", conditions.sellerIsOwner);
+		console.log("Kupac nije prodavatelj:", conditions.buyerIsNotSeller);
 		console.log(
-			"Stanje kupca prije pokušaja:",
-			buyerBalanceBeforeAttempt.toString(),
+			"Kupac ima dovoljno sredstava:",
+			conditions.buyerHasSufficientBalance,
 		);
+		console.log("Allowance dovoljan:", conditions.buyerHasSufficientAllowance);
+		console.log("Spremno za kupoprodaju:", conditions.readyForPurchase);
+		console.log("-----------------------------\n");
 
-		// 6. Kupnja mora pasti jer escrow nema TRANSFER_ROLE.
-		await assert.rejects(async () => {
-			await realEstateEscrow.write.fundSale([1n], {
-				account: buyer.account,
-			});
-		});
+		assert.equal(conditions.saleExists, true);
 
-		const saleAfterAttempt = await realEstateEscrow.read.getSale([1n]);
+		assert.equal(conditions.saleActive, true);
 
-		const ownerAfterAttempt = await propertyRegistry.read.getDigitalOwner([1n]);
+		assert.equal(conditions.documentsValid, true);
 
-		const buyerBalanceAfterAttempt = await mockEUR.read.balanceOf([
-			buyer.account.address,
-		]);
+		assert.equal(conditions.sellerIsOwner, true);
 
-		const sellerBalanceAfterAttempt = await mockEUR.read.balanceOf([
-			seller.account.address,
-		]);
-
-		const escrowBalanceAfterAttempt = await mockEUR.read.balanceOf([
-			realEstateEscrow.address,
-		]);
-
-		console.log("Kupoprodaja: poništena");
-		console.log("Status prodaje nakon pokušaja:", saleAfterAttempt.status);
-		console.log(
-			"Stanje kupca nakon pokušaja:",
-			buyerBalanceAfterAttempt.toString(),
-		);
-		console.log("Stanje prodavatelja:", sellerBalanceAfterAttempt.toString());
-		console.log("Stanje escrow ugovora:", escrowBalanceAfterAttempt.toString());
-		console.log("Vlasnik nakon pokušaja:", ownerAfterAttempt);
-		console.log("------------------------------------------\n");
+		assert.equal(conditions.buyerIsNotSeller, true);
 
 		assert.equal(
-			saleAfterAttempt.status,
-			0,
-			"Prodaja mora ostati u statusu Created",
+			conditions.buyerHasSufficientBalance,
+			false,
+			"Kupac bez mEUR tokena ne smije zadovoljiti uvjet sredstava",
 		);
 
-		assert.equal(
-			saleAfterAttempt.buyer,
-			"0x0000000000000000000000000000000000000000",
-			"Kupac ne smije ostati spremljen nakon poništene transakcije",
-		);
+		assert.equal(conditions.buyerHasSufficientAllowance, false);
 
 		assert.equal(
-			buyerBalanceAfterAttempt,
-			buyerInitialBalance,
-			"Kupcu se tokeni ne smiju oduzeti",
-		);
-
-		assert.equal(
-			sellerBalanceAfterAttempt,
-			0n,
-			"Prodavatelj ne smije primiti sredstva",
-		);
-
-		assert.equal(
-			escrowBalanceAfterAttempt,
-			0n,
-			"Escrow ne smije zadržati sredstva",
-		);
-
-		assert.equal(
-			ownerAfterAttempt.toLowerCase(),
-			seller.account.address.toLowerCase(),
-			"Prodavatelj mora ostati vlasnik nekretnine",
+			conditions.readyForPurchase,
+			false,
+			"Kupoprodaja ne smije biti spremna bez sredstava",
 		);
 	});
 
-	it("ne dopušta prodavatelju kupnju vlastite nekretnine", async function () {
+	it("nakon dodjele sredstava još uvijek nije spremno dok kupac ne odobri allowance", async function () {
 		const {
 			seller,
+			buyer,
 			publicClient,
-			propertyRegistry,
 			mockEUR,
 			realEstateEscrow,
-			verifyProperty,
+			prepareVerifiedProperty,
 		} = await createEscrowTestContext();
 
-		const documentHash =
-			"0x8888888888888888888888888888888888888888888888888888888888888888";
-
-		const sellerInitialBalance = 20_000_000n;
 		const propertyPrice = 15_000_000n;
+		const buyerInitialBalance = 20_000_000n;
 
-		// 1. Prodavatelj registrira nekretninu.
-		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty(
-				["Osijek", "19000/19", "Trg Ante Starčevića 19, Osijek", documentHash],
-				{
-					account: seller.account,
-				},
-			);
+		await prepareVerifiedProperty();
 
-		await publicClient.waitForTransactionReceipt({
-			hash: registerTransactionHash,
-		});
-
-		// 2. Verifikator potvrđuje nekretninu.
-		await verifyProperty(1n);
-
-		// 3. Prodavatelj kreira prodaju.
-		const createSaleTransactionHash = await realEstateEscrow.write.createSale(
+		const createSaleHash = await realEstateEscrow.write.createSale(
 			[1n, propertyPrice],
 			{
 				account: seller.account,
@@ -1113,104 +1458,67 @@ describe("RealEstateEscrow", function () {
 		);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: createSaleTransactionHash,
+			hash: createSaleHash,
 		});
 
-		// 4. Prodavatelju se dodjeljuju tokeni.
-		const mintTransactionHash = await mockEUR.write.mint([
-			seller.account.address,
-			sellerInitialBalance,
+		const mintHash = await mockEUR.write.mint([
+			buyer.account.address,
+			buyerInitialBalance,
 		]);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: mintTransactionHash,
+			hash: mintHash,
 		});
 
-		// 5. Prodavatelj odobrava escrowu korištenje tokena.
-		const approveTransactionHash = await mockEUR.write.approve(
-			[realEstateEscrow.address, propertyPrice],
-			{
-				account: seller.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: approveTransactionHash,
-		});
-
-		console.log("\n--- KUPOVINA VLASTITE NEKRETNINE ---");
-		console.log("Adresa prodavatelja:", seller.account.address);
-		console.log("Pokušaj kupovine vlastite nekretnine");
-
-		// 6. Prodavatelj pokušava kupiti vlastitu nekretninu.
-		await assert.rejects(async () => {
-			await realEstateEscrow.write.fundSale([1n], {
-				account: seller.account,
-			});
-		});
-
-		const saleAfterAttempt = await realEstateEscrow.read.getSale([1n]);
-
-		const sellerBalanceAfterAttempt = await mockEUR.read.balanceOf([
-			seller.account.address,
+		const conditions = await realEstateEscrow.read.getPurchaseConditions([
+			1n,
+			buyer.account.address,
 		]);
 
-		const escrowBalanceAfterAttempt = await mockEUR.read.balanceOf([
-			realEstateEscrow.address,
-		]);
+		console.log("\n--- UVJETI PRIJE APPROVE ---");
+		console.log("Prodaja postoji:", conditions.saleExists);
+		console.log("Prodaja aktivna:", conditions.saleActive);
+		console.log("Dokumentacija valjana:", conditions.documentsValid);
+		console.log("Prodavatelj je vlasnik:", conditions.sellerIsOwner);
+		console.log("Kupac nije prodavatelj:", conditions.buyerIsNotSeller);
+		console.log(
+			"Kupac ima dovoljno sredstava:",
+			conditions.buyerHasSufficientBalance,
+		);
+		console.log("Allowance dovoljan:", conditions.buyerHasSufficientAllowance);
+		console.log("Spremno za kupoprodaju:", conditions.readyForPurchase);
+		console.log("-----------------------------\n");
 
-		const allowanceAfterAttempt = await mockEUR.read.allowance([
-			seller.account.address,
-			realEstateEscrow.address,
-		]);
+		assert.equal(conditions.saleExists, true);
 
-		const ownerAfterAttempt = await propertyRegistry.read.getDigitalOwner([1n]);
+		assert.equal(conditions.saleActive, true);
 
-		console.log("Pokušaj kupovine: odbijen");
-		console.log("Status prodaje nakon pokušaja:", saleAfterAttempt.status);
-		console.log("Stanje prodavatelja:", sellerBalanceAfterAttempt.toString());
-		console.log("Stanje escrow ugovora:", escrowBalanceAfterAttempt.toString());
-		console.log("Digitalni vlasnik:", ownerAfterAttempt);
-		console.log("-------------------------------------\n");
+		assert.equal(conditions.documentsValid, true);
+
+		assert.equal(conditions.sellerIsOwner, true);
+
+		assert.equal(conditions.buyerIsNotSeller, true);
 
 		assert.equal(
-			saleAfterAttempt.status,
-			0,
-			"Prodaja mora ostati u statusu Created",
+			conditions.buyerHasSufficientBalance,
+			true,
+			"Kupac ima dovoljno sredstava",
 		);
 
 		assert.equal(
-			saleAfterAttempt.buyer,
-			"0x0000000000000000000000000000000000000000",
-			"Kupac ne smije biti spremljen",
+			conditions.buyerHasSufficientAllowance,
+			false,
+			"Bez approve poziva allowance mora biti nedovoljan",
 		);
 
 		assert.equal(
-			sellerBalanceAfterAttempt,
-			sellerInitialBalance,
-			"Prodavatelju se tokeni ne smiju oduzeti",
-		);
-
-		assert.equal(
-			escrowBalanceAfterAttempt,
-			0n,
-			"Escrow ne smije primiti sredstva",
-		);
-
-		assert.equal(
-			allowanceAfterAttempt,
-			propertyPrice,
-			"Odobrenje mora ostati nepotrošeno",
-		);
-
-		assert.equal(
-			ownerAfterAttempt.toLowerCase(),
-			seller.account.address.toLowerCase(),
-			"Prodavatelj mora ostati vlasnik nekretnine",
+			conditions.readyForPurchase,
+			false,
+			"Samo raspoloživa sredstva nisu dovoljna bez allowancea",
 		);
 	});
 
-	it("ne dopušta kupnju ako kupac nije odobrio dovoljan iznos tokena", async function () {
+	it("readyForPurchase postaje true tek kada su svi uvjeti kupoprodaje ispunjeni", async function () {
 		const {
 			seller,
 			buyer,
@@ -1218,38 +1526,30 @@ describe("RealEstateEscrow", function () {
 			propertyRegistry,
 			mockEUR,
 			realEstateEscrow,
-			verifyProperty,
 			grantTransferRoleToEscrow,
+			prepareVerifiedProperty,
 		} = await createEscrowTestContext();
 
-		const documentHash =
-			"0x9999999999999999999999999999999999999999999999999999999999999999";
+		const propertyPrice = 15_000_000n;
+		const buyerInitialBalance = 20_000_000n;
 
-		const buyerInitialBalance = 20_000_000n; // 200.000,00 mEUR
-		const propertyPrice = 15_000_000n; // 150.000,00 mEUR
-		const approvedAmount = 10_000_000n; // 100.000,00 mEUR
+		/* ==================================================
+		   1. DOKUMENTACIJA
+		   ================================================== */
 
-		// 1. Prodavatelj registrira nekretninu.
-		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty(
-				["Osijek", "20000/20", "Ulica kneza Trpimira 20, Osijek", documentHash],
-				{
-					account: seller.account,
-				},
-			);
+		await prepareVerifiedProperty();
 
-		await publicClient.waitForTransactionReceipt({
-			hash: registerTransactionHash,
-		});
+		/* ==================================================
+		   2. TRANSFER_ROLE ZA ESCROW
+		   ================================================== */
 
-		// 2. Verifikator potvrđuje nekretninu.
-		await verifyProperty(1n);
-
-		// 3. Escrow dobiva dopuštenje za prijenos vlasništva.
 		await grantTransferRoleToEscrow();
 
-		// 4. Prodavatelj kreira prodaju.
-		const createSaleTransactionHash = await realEstateEscrow.write.createSale(
+		/* ==================================================
+		   3. AKTIVNA PRODAJA
+		   ================================================== */
+
+		const createSaleHash = await realEstateEscrow.write.createSale(
 			[1n, propertyPrice],
 			{
 				account: seller.account,
@@ -1257,112 +1557,254 @@ describe("RealEstateEscrow", function () {
 		);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: createSaleTransactionHash,
+			hash: createSaleHash,
 		});
 
-		// 5. Kupac dobiva dovoljno tokena.
-		const mintTransactionHash = await mockEUR.write.mint([
+		/* ==================================================
+		   4. SREDSTVA KUPCA
+		   ================================================== */
+
+		const mintHash = await mockEUR.write.mint([
 			buyer.account.address,
 			buyerInitialBalance,
 		]);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: mintTransactionHash,
+			hash: mintHash,
 		});
 
-		// 6. Kupac odobrava samo 100.000,00 mEUR,
-		// iako nekretnina košta 150.000,00 mEUR.
-		const approveTransactionHash = await mockEUR.write.approve(
-			[realEstateEscrow.address, approvedAmount],
+		/* ==================================================
+		   5. ALLOWANCE
+		   ================================================== */
+
+		const approveHash = await mockEUR.write.approve(
+			[realEstateEscrow.address, propertyPrice],
 			{
 				account: buyer.account,
 			},
 		);
 
 		await publicClient.waitForTransactionReceipt({
-			hash: approveTransactionHash,
+			hash: approveHash,
 		});
 
-		console.log("\n--- NEDOVOLJNO ODOBRENJE TOKENA ---");
-		console.log("Prodajna cijena:", propertyPrice.toString());
-		console.log("Odobreni iznos:", approvedAmount.toString());
+		/* ==================================================
+		   6. BLOCKCHAIN CHECKLISTA
+		   ================================================== */
 
-		// 7. Kupnja mora biti odbijena jer odobrenje nije dovoljno.
-		await assert.rejects(async () => {
-			await realEstateEscrow.write.fundSale([1n], {
-				account: buyer.account,
-			});
-		});
+		const conditionsBeforePurchase =
+			await realEstateEscrow.read.getPurchaseConditions([
+				1n,
+				buyer.account.address,
+			]);
 
-		const saleAfterAttempt = await realEstateEscrow.read.getSale([1n]);
+		console.log("\n======================================");
+		console.log("   UVJETI ZA IZVRŠENJE KUPOPRODAJE");
+		console.log("======================================");
+		console.log(
+			"Prodaja postoji:              ",
+			conditionsBeforePurchase.saleExists,
+		);
+		console.log(
+			"Prodaja je aktivna:           ",
+			conditionsBeforePurchase.saleActive,
+		);
+		console.log(
+			"Dokumentacija je valjana:     ",
+			conditionsBeforePurchase.documentsValid,
+		);
+		console.log(
+			"Prodavatelj je vlasnik:       ",
+			conditionsBeforePurchase.sellerIsOwner,
+		);
+		console.log(
+			"Kupac nije prodavatelj:       ",
+			conditionsBeforePurchase.buyerIsNotSeller,
+		);
+		console.log(
+			"Kupac ima dovoljno sredstava: ",
+			conditionsBeforePurchase.buyerHasSufficientBalance,
+		);
+		console.log(
+			"Allowance je dovoljan:        ",
+			conditionsBeforePurchase.buyerHasSufficientAllowance,
+		);
+		console.log("--------------------------------------");
+		console.log(
+			"SPREMNO ZA KUPOPRODAJU:       ",
+			conditionsBeforePurchase.readyForPurchase,
+		);
+		console.log("======================================\n");
 
-		const buyerBalanceAfterAttempt = await mockEUR.read.balanceOf([
-			buyer.account.address,
-		]);
+		assert.equal(conditionsBeforePurchase.saleExists, true);
 
-		const sellerBalanceAfterAttempt = await mockEUR.read.balanceOf([
-			seller.account.address,
-		]);
+		assert.equal(conditionsBeforePurchase.saleActive, true);
 
-		const escrowBalanceAfterAttempt = await mockEUR.read.balanceOf([
-			realEstateEscrow.address,
-		]);
+		assert.equal(conditionsBeforePurchase.documentsValid, true);
 
-		const allowanceAfterAttempt = await mockEUR.read.allowance([
-			buyer.account.address,
-			realEstateEscrow.address,
-		]);
+		assert.equal(conditionsBeforePurchase.sellerIsOwner, true);
 
-		const ownerAfterAttempt = await propertyRegistry.read.getDigitalOwner([1n]);
+		assert.equal(conditionsBeforePurchase.buyerIsNotSeller, true);
 
-		console.log("Pokušaj kupnje: odbijen");
-		console.log("Status prodaje:", saleAfterAttempt.status);
-		console.log("Stanje kupca:", buyerBalanceAfterAttempt.toString());
-		console.log("Stanje prodavatelja:", sellerBalanceAfterAttempt.toString());
-		console.log("Stanje escrow ugovora:", escrowBalanceAfterAttempt.toString());
-		console.log("Preostalo odobrenje:", allowanceAfterAttempt.toString());
-		console.log("------------------------------------\n");
+		assert.equal(conditionsBeforePurchase.buyerHasSufficientBalance, true);
+
+		assert.equal(conditionsBeforePurchase.buyerHasSufficientAllowance, true);
 
 		assert.equal(
-			saleAfterAttempt.status,
-			0,
-			"Prodaja mora ostati u statusu Created",
+			conditionsBeforePurchase.readyForPurchase,
+			true,
+			"Smart contract mora označiti kupoprodaju spremnom tek kada su svi uvjeti ispunjeni",
+		);
+
+		/* ==================================================
+		   7. AUTOMATSKO IZVRŠENJE
+		   ================================================== */
+
+		const fundSaleHash = await realEstateEscrow.write.fundSale([1n], {
+			account: buyer.account,
+		});
+
+		await publicClient.waitForTransactionReceipt({
+			hash: fundSaleHash,
+		});
+
+		const saleAfterPurchase = await realEstateEscrow.read.getSale([1n]);
+
+		const newOwner = await propertyRegistry.read.getDigitalOwner([1n]);
+
+		assert.equal(
+			saleAfterPurchase.status,
+			2,
+			"Prodaja mora nakon izvršenja biti Completed",
 		);
 
 		assert.equal(
-			saleAfterAttempt.buyer,
-			"0x0000000000000000000000000000000000000000",
-			"Kupac ne smije biti spremljen",
+			newOwner.toLowerCase(),
+			buyer.account.address.toLowerCase(),
+			"Kupac mora postati novi digitalni vlasnik",
+		);
+
+		/* ==================================================
+		   8. NAKON KUPOPRODAJE VIŠE NIJE AKTIVNA
+		   ================================================== */
+
+		const conditionsAfterPurchase =
+			await realEstateEscrow.read.getPurchaseConditions([
+				1n,
+				buyer.account.address,
+			]);
+
+		assert.equal(
+			conditionsAfterPurchase.saleExists,
+			true,
+			"Završena prodaja i dalje postoji u povijesti",
 		);
 
 		assert.equal(
-			buyerBalanceAfterAttempt,
+			conditionsAfterPurchase.saleActive,
+			false,
+			"Završena prodaja više ne smije biti aktivna",
+		);
+
+		assert.equal(
+			conditionsAfterPurchase.readyForPurchase,
+			false,
+			"Završena prodaja više ne smije biti dostupna za novu kupnju",
+		);
+	});
+
+	it("otkazana prodaja više nije spremna za kupoprodaju", async function () {
+		const {
+			seller,
+			buyer,
+			publicClient,
+			mockEUR,
+			realEstateEscrow,
+			prepareVerifiedProperty,
+		} = await createEscrowTestContext();
+
+		const propertyPrice = 15_000_000n;
+		const buyerInitialBalance = 20_000_000n;
+
+		await prepareVerifiedProperty();
+
+		const createSaleHash = await realEstateEscrow.write.createSale(
+			[1n, propertyPrice],
+			{
+				account: seller.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: createSaleHash,
+		});
+
+		const mintHash = await mockEUR.write.mint([
+			buyer.account.address,
 			buyerInitialBalance,
-			"Kupcu se tokeni ne smiju oduzeti",
+		]);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: mintHash,
+		});
+
+		const approveHash = await mockEUR.write.approve(
+			[realEstateEscrow.address, propertyPrice],
+			{
+				account: buyer.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: approveHash,
+		});
+
+		const beforeCancellation =
+			await realEstateEscrow.read.getPurchaseConditions([
+				1n,
+				buyer.account.address,
+			]);
+
+		assert.equal(
+			beforeCancellation.readyForPurchase,
+			true,
+			"Prije otkazivanja svi uvjeti moraju biti zadovoljeni",
+		);
+
+		const cancelHash = await realEstateEscrow.write.cancelSale([1n], {
+			account: seller.account,
+		});
+
+		await publicClient.waitForTransactionReceipt({
+			hash: cancelHash,
+		});
+
+		const afterCancellation = await realEstateEscrow.read.getPurchaseConditions(
+			[1n, buyer.account.address],
+		);
+
+		console.log("\n--- OTKAZANA PRODAJA ---");
+		console.log("Prodaja postoji:", afterCancellation.saleExists);
+		console.log("Prodaja aktivna:", afterCancellation.saleActive);
+		console.log("Spremno za kupoprodaju:", afterCancellation.readyForPurchase);
+		console.log("------------------------\n");
+
+		assert.equal(
+			afterCancellation.saleExists,
+			true,
+			"Otkazana prodaja ostaje spremljena u povijesti",
 		);
 
 		assert.equal(
-			sellerBalanceAfterAttempt,
-			0n,
-			"Prodavatelj ne smije primiti tokene",
+			afterCancellation.saleActive,
+			false,
+			"Otkazana prodaja više nije aktivna",
 		);
 
 		assert.equal(
-			escrowBalanceAfterAttempt,
-			0n,
-			"Escrow ne smije primiti tokene",
-		);
-
-		assert.equal(
-			allowanceAfterAttempt,
-			approvedAmount,
-			"Odobrenje mora ostati nepotrošeno",
-		);
-
-		assert.equal(
-			ownerAfterAttempt.toLowerCase(),
-			seller.account.address.toLowerCase(),
-			"Prodavatelj mora ostati vlasnik",
+			afterCancellation.readyForPurchase,
+			false,
+			"Otkazana prodaja ne smije biti spremna za izvršenje",
 		);
 	});
 });

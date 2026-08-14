@@ -5,7 +5,8 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 /**
  * @title PropertyRegistry
- * @notice Registar nekretnina i njihovih digitalnih vlasnika.
+ * @notice Blockchain registar nekretnina, pripadajuće dokumentacije
+ * i digitalnih vlasnika.
  *
  * Ovaj pametni ugovor predstavlja prototip i ne zamjenjuje
  * službeni upis vlasništva u zemljišne knjige Republike Hrvatske.
@@ -15,12 +16,42 @@ contract PropertyRegistry is AccessControl {
     bytes32 public constant TRANSFER_ROLE = keccak256("TRANSFER_ROLE");
 
     /**
-     * @notice Status provjere nekretnine i pripadajuće dokumentacije.
+     * @notice Broj obveznih vrsta dokumenata u prototipu.
+     */
+    uint8 public constant REQUIRED_DOCUMENT_COUNT = 3;
+
+    /**
+     * @notice Status provjere dokumenta ili ukupne dokumentacije nekretnine.
      */
     enum VerificationStatus {
         Pending,
         Verified,
         Rejected
+    }
+
+    /**
+     * @notice Vrste dokumenata koje su obvezne prije prodaje nekretnine.
+     *
+     * Popis predstavlja prototip sustava.
+     * Konačna interpretacija dokumentacije obrađuje se
+     * u pravnom dijelu diplomskog rada.
+     */
+    enum DocumentType {
+        LandRegistryExtract,
+        CadastralDocument,
+        OwnershipDocument
+    }
+
+    /**
+     * @notice Dokument povezan s određenom nekretninom.
+     *
+     * Na blockchain se ne sprema sadržaj dokumenta,
+     * nego samo njegov kriptografski hash.
+     */
+    struct PropertyDocument {
+        bytes32 documentHash;
+        VerificationStatus verificationStatus;
+        bool submitted;
     }
 
     /**
@@ -31,7 +62,6 @@ contract PropertyRegistry is AccessControl {
         string cadastralMunicipality;
         string parcelNumber;
         string propertyAddress;
-        bytes32 documentHash;
         address digitalOwner;
         VerificationStatus verificationStatus;
         bool exists;
@@ -39,7 +69,16 @@ contract PropertyRegistry is AccessControl {
 
     uint256 private nextPropertyId = 1;
 
+    /**
+     * @notice Registrirane nekretnine.
+     */
     mapping(uint256 => Property) private properties;
+
+    /**
+     * @notice Dokumenti pojedine nekretnine prema vrsti dokumenta.
+     */
+    mapping(uint256 => mapping(DocumentType => PropertyDocument))
+        private propertyDocuments;
 
     /**
      * @notice Sprema informaciju je li određena katastarska čestica
@@ -58,7 +97,36 @@ contract PropertyRegistry is AccessControl {
     );
 
     /**
-     * @notice Događaj koji se zapisuje kada verifikator potvrdi nekretninu.
+     * @notice Događaj koji se zapisuje kada vlasnik preda dokument.
+     */
+    event PropertyDocumentSubmitted(
+        uint256 indexed propertyId,
+        DocumentType indexed documentType,
+        bytes32 documentHash,
+        address indexed submittedBy
+    );
+
+    /**
+     * @notice Događaj koji se zapisuje kada verifikator potvrdi dokument.
+     */
+    event PropertyDocumentVerified(
+        uint256 indexed propertyId,
+        DocumentType indexed documentType,
+        address indexed verifier
+    );
+
+    /**
+     * @notice Događaj koji se zapisuje kada verifikator odbije dokument.
+     */
+    event PropertyDocumentRejected(
+        uint256 indexed propertyId,
+        DocumentType indexed documentType,
+        address indexed verifier
+    );
+
+    /**
+     * @notice Događaj koji se zapisuje kada cijela dokumentacija
+     * nekretnine postane potvrđena.
      */
     event PropertyVerified(
         uint256 indexed propertyId,
@@ -66,11 +134,30 @@ contract PropertyRegistry is AccessControl {
     );
 
     /**
-     * @notice Događaj koji se zapisuje kada verifikator odbije nekretninu.
+     * @notice Događaj koji se zapisuje kada dokumentacija
+     * nekretnine postane odbijena.
      */
     event PropertyRejected(
         uint256 indexed propertyId,
         address indexed verifier
+    );
+
+    /**
+     * @notice Događaj promjene ukupnog statusa dokumentacije.
+     */
+    event PropertyVerificationStatusChanged(
+        uint256 indexed propertyId,
+        VerificationStatus previousStatus,
+        VerificationStatus newStatus
+    );
+
+    /**
+     * @notice Događaj koji se zapisuje nakon promjene digitalnog vlasnika.
+     */
+    event PropertyOwnershipTransferred(
+        uint256 indexed propertyId,
+        address indexed previousOwner,
+        address indexed newOwner
     );
 
     constructor() {
@@ -80,18 +167,19 @@ contract PropertyRegistry is AccessControl {
     /**
      * @notice Registrira novu nekretninu u blockchain registru.
      *
+     * Registracijom se još ne smatra da nekretnina ima
+     * valjanu dokumentaciju. Dokumenti se dostavljaju zasebno.
+     *
      * @param cadastralMunicipality Katastarska općina.
      * @param parcelNumber Broj katastarske čestice.
      * @param propertyAddress Adresa nekretnine.
-     * @param documentHash Hash dokumentacije nekretnine.
      *
      * @return propertyId Jedinstveni identifikator nekretnine.
      */
     function registerProperty(
         string calldata cadastralMunicipality,
         string calldata parcelNumber,
-        string calldata propertyAddress,
-        bytes32 documentHash
+        string calldata propertyAddress
     ) external returns (uint256 propertyId) {
         require(
             bytes(cadastralMunicipality).length > 0,
@@ -104,8 +192,6 @@ contract PropertyRegistry is AccessControl {
             bytes(propertyAddress).length > 0,
             "Adresa nekretnine je obavezna"
         );
-
-        require(documentHash != bytes32(0), "Hash dokumentacije nije valjan");
 
         bytes32 parcelKey = keccak256(
             abi.encode(cadastralMunicipality, parcelNumber)
@@ -123,13 +209,13 @@ contract PropertyRegistry is AccessControl {
             cadastralMunicipality: cadastralMunicipality,
             parcelNumber: parcelNumber,
             propertyAddress: propertyAddress,
-            documentHash: documentHash,
             digitalOwner: msg.sender,
             verificationStatus: VerificationStatus.Pending,
             exists: true
         });
 
         registeredParcels[parcelKey] = true;
+
         nextPropertyId++;
 
         emit PropertyRegistered(
@@ -143,56 +229,216 @@ contract PropertyRegistry is AccessControl {
     }
 
     /**
-     * @notice Potvrđuje nekretninu i pripadajuću dokumentaciju.
+     * @notice Predaje jedan od obveznih dokumenata nekretnine.
      *
-     * Funkciju može pozvati samo korisnik s VERIFIER_ROLE ulogom.
+     * Na blockchain se sprema samo hash dokumenta.
+     * Dokument može predati samo trenutačni digitalni vlasnik.
      *
-     * @param propertyId Jedinstveni identifikator nekretnine.
+     * Odbijeni dokument moguće je ponovno predati.
+     * Već potvrđeni dokument nije moguće zamijeniti.
+     *
+     * @param propertyId ID nekretnine.
+     * @param documentType Vrsta dokumenta.
+     * @param documentHash Kriptografski hash dokumenta.
      */
-    function verifyProperty(
-        uint256 propertyId
-    ) external onlyRole(VERIFIER_ROLE) {
+    function submitPropertyDocument(
+        uint256 propertyId,
+        DocumentType documentType,
+        bytes32 documentHash
+    ) external {
         require(properties[propertyId].exists, "Nekretnina ne postoji");
 
         require(
-            properties[propertyId].verificationStatus ==
-                VerificationStatus.Pending,
-            "Nekretnina vise nije na cekanju"
+            properties[propertyId].digitalOwner == msg.sender,
+            "Samo vlasnik moze predati dokument"
         );
 
-        properties[propertyId].verificationStatus = VerificationStatus.Verified;
+        require(documentHash != bytes32(0), "Hash dokumenta nije valjan");
 
-        emit PropertyVerified(propertyId, msg.sender);
+        PropertyDocument storage document = propertyDocuments[propertyId][
+            documentType
+        ];
+
+        require(
+            document.verificationStatus != VerificationStatus.Verified,
+            "Potvrdeni dokument nije moguce zamijeniti"
+        );
+
+        document.documentHash = documentHash;
+        document.verificationStatus = VerificationStatus.Pending;
+        document.submitted = true;
+
+        _refreshPropertyVerificationStatus(propertyId);
+
+        emit PropertyDocumentSubmitted(
+            propertyId,
+            documentType,
+            documentHash,
+            msg.sender
+        );
     }
 
     /**
-     * @notice Odbija nekretninu i pripadajuću dokumentaciju.
+     * @notice Potvrđuje pojedinačni dokument nekretnine.
      *
      * Funkciju može pozvati samo korisnik s VERIFIER_ROLE ulogom.
      *
-     * @param propertyId Jedinstveni identifikator nekretnine.
+     * @param propertyId ID nekretnine.
+     * @param documentType Vrsta dokumenta.
      */
-    function rejectProperty(
-        uint256 propertyId
+    function verifyPropertyDocument(
+        uint256 propertyId,
+        DocumentType documentType
     ) external onlyRole(VERIFIER_ROLE) {
         require(properties[propertyId].exists, "Nekretnina ne postoji");
 
+        PropertyDocument storage document = propertyDocuments[propertyId][
+            documentType
+        ];
+
+        require(document.submitted, "Dokument nije predan");
+
         require(
-            properties[propertyId].verificationStatus ==
-                VerificationStatus.Pending,
-            "Nekretnina vise nije na cekanju"
+            document.verificationStatus == VerificationStatus.Pending,
+            "Dokument vise nije na cekanju"
         );
 
-        properties[propertyId].verificationStatus = VerificationStatus.Rejected;
+        document.verificationStatus = VerificationStatus.Verified;
 
-        emit PropertyRejected(propertyId, msg.sender);
+        emit PropertyDocumentVerified(propertyId, documentType, msg.sender);
+
+        VerificationStatus previousStatus = properties[propertyId]
+            .verificationStatus;
+
+        _refreshPropertyVerificationStatus(propertyId);
+
+        if (
+            previousStatus != VerificationStatus.Verified &&
+            properties[propertyId].verificationStatus ==
+            VerificationStatus.Verified
+        ) {
+            emit PropertyVerified(propertyId, msg.sender);
+        }
     }
 
     /**
-     * @notice Mijenja digitalnog vlasnika potvrđene nekretnine.
+     * @notice Odbija pojedinačni dokument nekretnine.
+     *
+     * Funkciju može pozvati samo korisnik s VERIFIER_ROLE ulogom.
+     *
+     * @param propertyId ID nekretnine.
+     * @param documentType Vrsta dokumenta.
+     */
+    function rejectPropertyDocument(
+        uint256 propertyId,
+        DocumentType documentType
+    ) external onlyRole(VERIFIER_ROLE) {
+        require(properties[propertyId].exists, "Nekretnina ne postoji");
+
+        PropertyDocument storage document = propertyDocuments[propertyId][
+            documentType
+        ];
+
+        require(document.submitted, "Dokument nije predan");
+
+        require(
+            document.verificationStatus == VerificationStatus.Pending,
+            "Dokument vise nije na cekanju"
+        );
+
+        document.verificationStatus = VerificationStatus.Rejected;
+
+        emit PropertyDocumentRejected(propertyId, documentType, msg.sender);
+
+        VerificationStatus previousStatus = properties[propertyId]
+            .verificationStatus;
+
+        _refreshPropertyVerificationStatus(propertyId);
+
+        if (
+            previousStatus != VerificationStatus.Rejected &&
+            properties[propertyId].verificationStatus ==
+            VerificationStatus.Rejected
+        ) {
+            emit PropertyRejected(propertyId, msg.sender);
+        }
+    }
+
+    /**
+     * @notice Provjerava jesu li sva obvezna dokumenta predana.
+     *
+     * @param propertyId ID nekretnine.
+     *
+     * @return true ako su sva obvezna dokumenta predana.
+     */
+    function hasAllRequiredDocuments(
+        uint256 propertyId
+    ) public view returns (bool) {
+        require(properties[propertyId].exists, "Nekretnina ne postoji");
+
+        for (uint8 i = 0; i < REQUIRED_DOCUMENT_COUNT; i++) {
+            DocumentType documentType = DocumentType(i);
+
+            if (!propertyDocuments[propertyId][documentType].submitted) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @notice Provjerava jesu li sva obvezna dokumenta
+     * predana i potvrđena.
+     *
+     * Ovo je ključna automatska provjera prije dopuštanja prodaje.
+     *
+     * @param propertyId ID nekretnine.
+     *
+     * @return true ako sva obvezna dokumentacija postoji
+     * i svaki dokument ima status Verified.
+     */
+    function hasValidDocuments(uint256 propertyId) public view returns (bool) {
+        require(properties[propertyId].exists, "Nekretnina ne postoji");
+
+        for (uint8 i = 0; i < REQUIRED_DOCUMENT_COUNT; i++) {
+            DocumentType documentType = DocumentType(i);
+
+            PropertyDocument storage document = propertyDocuments[propertyId][
+                documentType
+            ];
+
+            if (
+                !document.submitted ||
+                document.verificationStatus != VerificationStatus.Verified
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @notice Vraća pojedinačni dokument nekretnine.
+     */
+    function getPropertyDocument(
+        uint256 propertyId,
+        DocumentType documentType
+    ) external view returns (PropertyDocument memory) {
+        require(properties[propertyId].exists, "Nekretnina ne postoji");
+
+        return propertyDocuments[propertyId][documentType];
+    }
+
+    /**
+     * @notice Mijenja digitalnog vlasnika nekretnine.
+     *
+     * Prijenos je moguć samo ako su svi obvezni dokumenti
+     * predani i potvrđeni.
      *
      * Funkciju može pozvati samo adresa s TRANSFER_ROLE ulogom.
-     * U konačnoj verziji tu će ulogu imati escrow pametni ugovor.
+     * U stvarnom toku prototipa tu ulogu ima escrow pametni ugovor.
      *
      * @param propertyId Jedinstveni identifikator nekretnine.
      * @param newOwner Adresa novog digitalnog vlasnika.
@@ -204,9 +450,8 @@ contract PropertyRegistry is AccessControl {
         require(properties[propertyId].exists, "Nekretnina ne postoji");
 
         require(
-            properties[propertyId].verificationStatus ==
-                VerificationStatus.Verified,
-            "Nekretnina nije potvrdena"
+            hasValidDocuments(propertyId),
+            "Dokumentacija nekretnine nije valjana"
         );
 
         require(newOwner != address(0), "Adresa novog vlasnika nije valjana");
@@ -225,8 +470,6 @@ contract PropertyRegistry is AccessControl {
 
     /**
      * @notice Vraća ukupan broj registriranih nekretnina.
-     *
-     * @return Ukupan broj nekretnina u registru.
      */
     function getPropertyCount() external view returns (uint256) {
         return nextPropertyId - 1;
@@ -244,24 +487,17 @@ contract PropertyRegistry is AccessControl {
     }
 
     /**
-     * @notice Provjerava je li nekretnina potvrđena.
+     * @notice Provjerava je li nekretnina spremna za prodaju
+     * sa stajališta dokumentacije.
      */
     function isPropertyVerified(
         uint256 propertyId
     ) external view returns (bool) {
-        require(properties[propertyId].exists, "Nekretnina ne postoji");
-
-        return
-            properties[propertyId].verificationStatus ==
-            VerificationStatus.Verified;
+        return hasValidDocuments(propertyId);
     }
 
     /**
      * @notice Dohvaća podatke registrirane nekretnine.
-     *
-     * @param propertyId Jedinstveni identifikator nekretnine.
-     *
-     * @return Podaci o nekretnini.
      */
     function getProperty(
         uint256 propertyId
@@ -272,11 +508,60 @@ contract PropertyRegistry is AccessControl {
     }
 
     /**
-     * @notice Događaj koji se zapisuje nakon promjene digitalnog vlasnika.
+     * @dev Automatski određuje ukupni status dokumentacije nekretnine.
+     *
+     * Pravila:
+     * - ako je barem jedan predani dokument odbijen -> Rejected
+     * - ako sva obvezna dokumenta postoje i potvrđena su -> Verified
+     * - u svim ostalim slučajevima -> Pending
      */
-    event PropertyOwnershipTransferred(
-        uint256 indexed propertyId,
-        address indexed previousOwner,
-        address indexed newOwner
-    );
+    function _refreshPropertyVerificationStatus(uint256 propertyId) private {
+        VerificationStatus previousStatus = properties[propertyId]
+            .verificationStatus;
+
+        bool allDocumentsVerified = true;
+        bool hasRejectedDocument = false;
+
+        for (uint8 i = 0; i < REQUIRED_DOCUMENT_COUNT; i++) {
+            DocumentType documentType = DocumentType(i);
+
+            PropertyDocument storage document = propertyDocuments[propertyId][
+                documentType
+            ];
+
+            if (
+                document.submitted &&
+                document.verificationStatus == VerificationStatus.Rejected
+            ) {
+                hasRejectedDocument = true;
+            }
+
+            if (
+                !document.submitted ||
+                document.verificationStatus != VerificationStatus.Verified
+            ) {
+                allDocumentsVerified = false;
+            }
+        }
+
+        VerificationStatus newStatus;
+
+        if (hasRejectedDocument) {
+            newStatus = VerificationStatus.Rejected;
+        } else if (allDocumentsVerified) {
+            newStatus = VerificationStatus.Verified;
+        } else {
+            newStatus = VerificationStatus.Pending;
+        }
+
+        properties[propertyId].verificationStatus = newStatus;
+
+        if (previousStatus != newStatus) {
+            emit PropertyVerificationStatusChanged(
+                propertyId,
+                previousStatus,
+                newStatus
+            );
+        }
+    }
 }
