@@ -64,12 +64,6 @@ export default function DashboardNavigation({
 
 	return (
 		<nav className="dashboard-navigation">
-			<div className="dashboard-navigation-header">
-				<p className="dashboard-navigation-eyebrow">Izbornik</p>
-
-				<strong>{profile}</strong>
-			</div>
-
 			<div className="dashboard-navigation-items">
 				{navigationItems.map((item) => (
 					<button

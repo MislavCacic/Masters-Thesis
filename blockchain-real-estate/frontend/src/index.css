@@ -1,111 +1,222 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+	/* =========================
+	   POZADINE
+	   ========================= */
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+	--bg-primary: #0b1220;
+	--bg-secondary: #0f172a;
+	--bg-tertiary: #162033;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+	--surface: #1b2638;
+	--surface-strong: #223047;
+	--surface-soft: #101827;
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+	/* =========================
+	   BORDERI
+	   ========================= */
+
+	--border: #2f3e59;
+	--border-strong: #51426f;
+
+	/* =========================
+	   TEKST
+	   ========================= */
+
+	--text-primary: #f8fafc;
+	--text-secondary: #aebbd0;
+	--text-muted: #8795aa;
+
+	/* =========================
+	   LJUBIČASTI ACCENT
+	   ========================= */
+
+	--accent: #7c3aed;
+	--accent-hover: #8b5cf6;
+	--accent-light: #a78bfa;
+	--accent-soft: rgb(124 58 237 / 14%);
+
+	--accent-2: #6d28d9;
+	--accent-2-hover: #7c3aed;
+
+	/* =========================
+	   SEMANTIČKE BOJE
+	   ========================= */
+
+	--success: #22c55e;
+	--success-soft: rgb(34 197 94 / 14%);
+
+	--warning: #f59e0b;
+	--warning-soft: rgb(245 158 11 / 14%);
+
+	--danger: #ef4444;
+	--danger-soft: rgb(239 68 68 / 14%);
+
+	/* =========================
+	   FONT
+	   ========================= */
+
+	font-family:
+		Inter,
+		system-ui,
+		-apple-system,
+		BlinkMacSystemFont,
+		"Segoe UI",
+		sans-serif;
+
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
+/* =========================
+   GLOBALNI RESET
+   ========================= */
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+* {
+	box-sizing: border-box;
 }
 
+html,
+body,
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
+	width: 100%;
+	min-width: 320px;
+	min-height: 100%;
+
+	margin: 0;
+	padding: 0;
 }
+
+html {
+	background: var(--bg-primary);
+}
+
+/* =========================
+   BODY
+   ========================= */
 
 body {
-  margin: 0;
+	min-height: 100vh;
+
+	background:
+		radial-gradient(circle at 15% 0%, rgb(76 29 149 / 10%), transparent 30%),
+		radial-gradient(circle at 85% 5%, rgb(30 41 59 / 38%), transparent 35%),
+		linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+
+	background-attachment: fixed;
+
+	color: var(--text-primary);
 }
+
+/* =========================
+   ROOT
+   ========================= */
+
+#root {
+	min-height: 100vh;
+}
+
+/* =========================
+   NASLOVI
+   ========================= */
 
 h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+h2,
+h3,
+h4,
+h5,
+h6 {
+	margin: 0;
+
+	color: var(--text-primary);
+
+	font-weight: 700;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
+/* =========================
+   PARAGRAFI
+   ========================= */
+
 p {
-  margin: 0;
+	margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+/* =========================
+   LINKOVI
+   ========================= */
+
+a {
+	color: var(--accent-light);
+
+	text-decoration: none;
+
+	transition: color 0.2s ease;
 }
+
+a:hover {
+	color: #c4b5fd;
+}
+
+/* =========================
+   CODE / BLOCKCHAIN HASH
+   ========================= */
 
 code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+	font-family:
+		ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+		"Courier New", monospace;
+}
+
+/* =========================
+   SELECTION
+   ========================= */
+
+::selection {
+	background: rgb(124 58 237 / 35%);
+	color: #ffffff;
+}
+
+/* =========================
+   SCROLLBAR
+   ========================= */
+
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+::-webkit-scrollbar-track {
+	background: #0b1220;
+}
+
+::-webkit-scrollbar-thumb {
+	border: 2px solid #0b1220;
+	border-radius: 999px;
+
+	background: #36435a;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: #51426f;
+}
+
+/* Firefox */
+
+* {
+	scrollbar-width: thin;
+	scrollbar-color: #36435a #0b1220;
+}
+
+/* =========================
+   RESPONSIVE
+   ========================= */
+
+@media (max-width: 600px) {
+	body {
+		background:
+			radial-gradient(circle at 50% 0%, rgb(76 29 149 / 8%), transparent 28%),
+			linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+	}
 }

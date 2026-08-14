@@ -1,9 +1,22 @@
 .dashboard-stats {
-	padding: 28px 32px;
-	border: 1px solid #334155;
-	border-radius: 18px;
-	background: #1e293b;
+	width: 100%;
+	box-sizing: border-box;
+
+	padding: 32px 36px;
+
+	border: 1px solid #2f3e59;
+	border-radius: 20px;
+
+	background: #1b2638;
+
+	box-shadow:
+		0 20px 50px rgb(0 0 0 / 20%),
+		inset 0 1px 0 rgb(255 255 255 / 2%);
 }
+
+/* =========================
+   ZAGLAVLJE
+   ========================= */
 
 .dashboard-stats-header {
 	display: flex;
@@ -12,9 +25,15 @@
 	gap: 20px;
 }
 
+.dashboard-stats-header > div {
+	min-width: 0;
+}
+
 .dashboard-stats-eyebrow {
 	margin: 0 0 7px;
-	color: #38bdf8;
+
+	color: #c4b5fd;
+
 	font-size: 12px;
 	font-weight: 700;
 	letter-spacing: 0.14em;
@@ -23,65 +42,194 @@
 
 .dashboard-stats-header h3 {
 	margin: 0;
+
+	color: #f8fafc;
+
 	font-size: 23px;
+	line-height: 1.2;
 }
+
+/* =========================
+   GUMB OSVJEŽI
+   ========================= */
 
 .dashboard-stats-refresh {
 	width: auto;
+	min-width: 0;
+
 	margin: 0;
-	padding: 11px 18px;
-	background: #334155;
+	padding: 10px 16px;
+
+	border: 1px solid #7c3aed;
+	border-radius: 10px;
+
+	background: #6d28d9;
+	color: #ffffff;
+
+	font-size: 12px;
+	font-weight: 700;
+
+	cursor: pointer;
+
+	box-shadow: none;
+
+	transition:
+		background 0.22s ease,
+		border-color 0.22s ease,
+		transform 0.22s ease,
+		box-shadow 0.22s ease,
+		opacity 0.22s ease;
 }
+
+.dashboard-stats-refresh:hover:not(:disabled) {
+	border-color: #a855f7;
+
+	background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 55%, #a855f7 100%);
+
+	transform: translateY(-2px);
+
+	box-shadow:
+		0 10px 24px rgb(124 58 237 / 25%),
+		0 0 0 1px rgb(168 85 247 / 14%);
+}
+
+.dashboard-stats-refresh:active:not(:disabled) {
+	transform: translateY(0) scale(0.98);
+}
+
+.dashboard-stats-refresh:disabled {
+	cursor: not-allowed;
+
+	opacity: 0.55;
+
+	transform: none;
+	box-shadow: none;
+}
+
+/* =========================
+   STATISTIKE
+   ========================= */
 
 .dashboard-stats-grid {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 	gap: 14px;
-	margin-top: 22px;
+
+	width: 100%;
+	margin-top: 24px;
 }
 
 .dashboard-stat-card {
-	display: grid;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
 	gap: 10px;
+
+	min-width: 0;
+	min-height: 96px;
+	box-sizing: border-box;
+
 	padding: 18px;
-	border: 1px solid #334155;
+
+	border: 1px solid #2f3e59;
 	border-radius: 12px;
-	background: #0f172a;
+
+	background: #101827;
+
 	text-align: center;
+
+	transition:
+		border-color 0.22s ease,
+		background 0.22s ease,
+		transform 0.22s ease,
+		box-shadow 0.22s ease;
+}
+
+/* =========================
+   HOVER STATISTIKE
+   ========================= */
+
+.dashboard-stat-card:hover {
+	border-color: #65518f;
+
+	background: #131c2e;
+
+	transform: translateY(-2px);
+
+	box-shadow:
+		0 10px 24px rgb(0 0 0 / 14%),
+		0 0 0 1px rgb(139 92 246 / 6%);
 }
 
 .dashboard-stat-card span {
-	color: #94a3b8;
+	color: #8795aa;
+
 	font-size: 13px;
+	line-height: 1.4;
 }
 
 .dashboard-stat-card strong {
-	color: #7dd3fc;
+	color: #c4b5fd;
+
 	font-size: 28px;
+	font-weight: 700;
+	line-height: 1;
 }
+
+/* =========================
+   GREŠKA
+   ========================= */
 
 .dashboard-stats-error {
 	margin: 20px 0 0;
-	padding: 14px;
-	border: 1px solid #ef4444;
+	padding: 14px 16px;
+
+	border: 1px solid #7f1d1d;
 	border-radius: 10px;
+
+	background: rgb(127 29 29 / 18%);
 	color: #fca5a5;
+
+	font-size: 13px;
+	line-height: 1.5;
+
+	overflow-wrap: anywhere;
 }
 
-@media (max-width: 800px) {
+/* =========================
+   TABLET
+   ========================= */
+
+@media (max-width: 900px) {
+	.dashboard-stats {
+		padding: 28px;
+	}
+
 	.dashboard-stats-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 
-@media (max-width: 640px) {
+/* =========================
+   MOBITEL
+   ========================= */
+
+@media (max-width: 600px) {
 	.dashboard-stats {
-		padding: 24px 20px;
+		padding: 22px 18px;
+
+		border-radius: 16px;
 	}
 
 	.dashboard-stats-header {
-		align-items: stretch;
 		flex-direction: column;
+		align-items: stretch;
+		gap: 16px;
+	}
+
+	.dashboard-stats-header h3 {
+		font-size: 21px;
 	}
 
 	.dashboard-stats-refresh {
@@ -90,5 +238,17 @@
 
 	.dashboard-stats-grid {
 		grid-template-columns: 1fr;
+		gap: 10px;
+
+		margin-top: 20px;
+	}
+
+	.dashboard-stat-card {
+		min-height: 84px;
+		padding: 16px;
+	}
+
+	.dashboard-stat-card strong {
+		font-size: 25px;
 	}
 }

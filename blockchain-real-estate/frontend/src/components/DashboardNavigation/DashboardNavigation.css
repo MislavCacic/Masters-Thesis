@@ -1,85 +1,184 @@
 .dashboard-navigation {
-	width: min(100%, 960px);
-	padding: 18px 20px;
-	border: 1px solid #334155;
-	border-radius: 18px;
-	background: #1e293b;
-	box-shadow: 0 18px 45px rgb(0 0 0 / 20%);
-}
-
-.dashboard-navigation-header {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 16px;
-	margin-bottom: 16px;
-}
+	justify-content: center;
 
-.dashboard-navigation-eyebrow {
+	width: 100%;
+	min-width: 0;
+
 	margin: 0;
-	color: #38bdf8;
-	font-size: 12px;
-	font-weight: 700;
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
-}
-
-.dashboard-navigation-header strong {
-	color: #f8fafc;
-	font-size: 15px;
+	padding: 0;
 }
 
 .dashboard-navigation-items {
 	display: flex;
-	flex-wrap: wrap;
-	gap: 10px;
+	align-items: center;
+	justify-content: center;
+
+	width: 100%;
+	min-width: 0;
+
+	gap: 7px;
+
+	flex-wrap: nowrap;
 }
 
 .dashboard-navigation-item {
+	flex: 0 0 auto;
+
 	width: auto;
+	min-width: 0;
+
 	margin: 0;
-	padding: 11px 18px;
-	border: 1px solid #475569;
-	border-radius: 10px;
-	background: #0f172a;
-	color: #cbd5e1;
-	font-size: 14px;
-	font-weight: 600;
+	padding: 9px 12px;
+
+	border: 1px solid #6755a4;
+	border-radius: 9px;
+
+	background: #51408d;
+	color: #eeeafd;
+
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1.2;
+
+	white-space: nowrap;
+
 	cursor: pointer;
+
+	box-shadow: none;
+
 	transition:
-		background 0.2s ease,
-		border-color 0.2s ease,
-		color 0.2s ease;
+		background 0.22s ease,
+		border-color 0.22s ease,
+		color 0.22s ease,
+		transform 0.22s ease,
+		box-shadow 0.22s ease;
 }
 
-.dashboard-navigation-item:hover {
-	border-color: #0ea5e9;
-	color: #f8fafc;
+/* ==================================================
+   HOVER
+   ================================================== */
+
+.dashboard-navigation-item:hover:not(:disabled) {
+	border-color: #8e78d2;
+
+	background: linear-gradient(135deg, #6250a7 0%, #7259bf 55%, #8067cd 100%);
+
+	color: #ffffff;
+
+	transform: translateY(-2px);
+
+	box-shadow:
+		0 8px 18px rgb(83 61 145 / 24%),
+		0 0 0 1px rgb(158 139 214 / 9%);
 }
+
+/* ==================================================
+   AKTIVAN
+   ================================================== */
 
 .dashboard-navigation-item.active {
-	border-color: #0ea5e9;
-	background: #0284c7;
+	border-color: #8069c7;
+
+	background: #654fb3;
 	color: #ffffff;
+
+	box-shadow:
+		0 5px 14px rgb(78 57 139 / 20%),
+		0 0 0 1px rgb(139 116 201 / 8%);
 }
 
-@media (max-width: 640px) {
-	.dashboard-navigation {
-		padding: 16px;
-	}
+/* ==================================================
+   ACTIVE HOVER
+   ================================================== */
 
-	.dashboard-navigation-header {
-		align-items: flex-start;
-		flex-direction: column;
+.dashboard-navigation-item.active:hover:not(:disabled) {
+	border-color: #a691e2;
+
+	background: linear-gradient(135deg, #6a54b9 0%, #7960c8 55%, #8b70d7 100%);
+
+	transform: translateY(-2px);
+
+	box-shadow:
+		0 9px 22px rgb(92 66 163 / 28%),
+		0 0 0 1px rgb(176 153 230 / 10%);
+}
+
+/* ==================================================
+   KLIK
+   ================================================== */
+
+.dashboard-navigation-item:active:not(:disabled) {
+	transform: translateY(0) scale(0.97);
+}
+
+/* ==================================================
+   DISABLED
+   ================================================== */
+
+.dashboard-navigation-item:disabled {
+	cursor: not-allowed;
+
+	opacity: 0.55;
+
+	transform: none;
+	box-shadow: none;
+}
+
+/* ==================================================
+   TABLET
+   ================================================== */
+
+@media (max-width: 900px) {
+	.dashboard-navigation {
+		width: 100%;
 	}
 
 	.dashboard-navigation-items {
+		width: 100%;
+
+		flex-wrap: wrap;
+
+		gap: 8px;
+	}
+
+	.dashboard-navigation-item {
+		padding: 10px 13px;
+
+		font-size: 12px;
+	}
+}
+
+/* ==================================================
+   MOBITEL
+   ================================================== */
+
+@media (max-width: 600px) {
+	.dashboard-navigation-items {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+
 		width: 100%;
+
+		gap: 8px;
 	}
 
 	.dashboard-navigation-item {
 		width: 100%;
+
+		padding: 11px 10px;
+
+		text-align: center;
+	}
+}
+
+/* ==================================================
+   JAKO MALI MOBITEL
+   ================================================== */
+
+@media (max-width: 420px) {
+	.dashboard-navigation-items {
+		grid-template-columns: 1fr;
 	}
 }

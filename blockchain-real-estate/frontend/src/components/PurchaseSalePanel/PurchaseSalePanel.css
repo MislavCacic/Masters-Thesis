@@ -1,11 +1,22 @@
 .purchase-card {
-	width: min(100%, 960px);
-	padding: 36px;
-	border: 1px solid #334155;
+	width: 100%;
+	box-sizing: border-box;
+
+	padding: 32px 36px;
+
+	border: 1px solid #2f3e59;
 	border-radius: 20px;
-	background: #1e293b;
-	box-shadow: 0 24px 60px rgb(0 0 0 / 25%);
+
+	background: #1b2638;
+
+	box-shadow:
+		0 20px 50px rgb(0 0 0 / 20%),
+		inset 0 1px 0 rgb(255 255 255 / 2%);
 }
+
+/* =========================
+   ZAGLAVLJE
+   ========================= */
 
 .purchase-header {
 	display: flex;
@@ -14,95 +25,328 @@
 	gap: 24px;
 }
 
+.purchase-header > div {
+	min-width: 0;
+}
+
 .purchase-header h2 {
 	margin: 0;
-	font-size: 32px;
+
+	color: #f8fafc;
+
+	font-size: 30px;
+	line-height: 1.2;
 }
 
 .purchase-header p:last-child {
 	max-width: 640px;
-	margin: 14px 0 0;
-	color: #cbd5e1;
+
+	margin: 12px 0 0;
+
+	color: #aebbd0;
+
+	font-size: 15px;
 	line-height: 1.6;
 }
+
+/* =========================
+   STANJE TOKENA
+   ========================= */
 
 .token-summary {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 16px;
+	gap: 14px;
+
 	margin-top: 26px;
 }
 
 .token-summary div {
-	display: grid;
+	display: flex;
+	flex-direction: column;
 	gap: 8px;
+
+	min-width: 0;
+
 	padding: 18px;
-	border: 1px solid #334155;
+
+	border: 1px solid #2f3e59;
 	border-radius: 12px;
-	background: #0f172a;
+
+	background: #101827;
+
+	transition:
+		border-color 0.22s ease,
+		background 0.22s ease,
+		transform 0.22s ease,
+		box-shadow 0.22s ease;
+}
+
+.token-summary div:hover {
+	border-color: #65518f;
+
+	background: #131c2e;
+
+	transform: translateY(-2px);
+
+	box-shadow:
+		0 10px 24px rgb(0 0 0 / 14%),
+		0 0 0 1px rgb(139 92 246 / 6%);
 }
 
 .token-summary span {
-	color: #94a3b8;
-	font-size: 14px;
+	color: #8795aa;
+
+	font-size: 13px;
+	line-height: 1.4;
 }
 
 .token-summary strong {
+	color: #c4b5fd;
+
 	font-size: 20px;
+	font-weight: 700;
+
+	overflow-wrap: anywhere;
 }
 
+/* =========================
+   CIJENA PRODAJE
+   ========================= */
+
 .sale-price {
+	display: inline-flex;
+	align-items: center;
+
 	padding: 8px 12px;
+
+	border: 1px solid rgb(139 92 246 / 35%);
 	border-radius: 999px;
-	background: rgb(3 105 161 / 30%);
-	color: #7dd3fc;
+
+	background: rgb(109 40 217 / 14%);
+	color: #c4b5fd;
+
+	font-size: 14px;
 	font-weight: 800;
+
 	white-space: nowrap;
 }
 
+/* =========================
+   AKCIJE KUPNJE
+   ========================= */
+
 .purchase-actions {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 14px;
+
 	margin-top: 20px;
 }
 
+/* =========================
+   ODOBRI SREDSTVA
+   ========================= */
+
 .approve-button {
-	background: #0369a1;
+	width: 100%;
+
+	padding: 13px 18px;
+
+	border: 1px solid #6d4bb3;
+	border-radius: 10px;
+
+	background: #5b35a5;
+	color: #ffffff;
+
+	font-weight: 700;
+
+	box-shadow: none;
+
+	transition:
+		background 0.22s ease,
+		border-color 0.22s ease,
+		transform 0.22s ease,
+		box-shadow 0.22s ease,
+		opacity 0.22s ease;
 }
 
 .approve-button:hover:not(:disabled) {
-	background: #075985;
+	border-color: #a78bfa;
+
+	background: linear-gradient(135deg, #6d28d9 0%, #7c3aed 55%, #8b5cf6 100%);
+
+	transform: translateY(-2px);
+
+	box-shadow:
+		0 10px 24px rgb(109 40 217 / 24%),
+		0 0 0 1px rgb(167 139 250 / 12%);
 }
 
+.approve-button:active:not(:disabled) {
+	transform: translateY(0) scale(0.99);
+}
+
+/* =========================
+   KUPI NEKRETNINU
+   ========================= */
+
 .purchase-button {
-	background: #15803d;
+	width: 100%;
+
+	padding: 13px 18px;
+
+	border: 1px solid #8b5cf6;
+	border-radius: 10px;
+
+	background: #6d28d9;
+	color: #ffffff;
+
+	font-weight: 700;
+
+	box-shadow: none;
+
+	transition:
+		background 0.22s ease,
+		border-color 0.22s ease,
+		transform 0.22s ease,
+		box-shadow 0.22s ease,
+		opacity 0.22s ease;
 }
 
 .purchase-button:hover:not(:disabled) {
-	background: #166534;
+	border-color: #c4b5fd;
+
+	background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 55%, #a78bfa 100%);
+
+	transform: translateY(-2px);
+
+	box-shadow:
+		0 10px 26px rgb(124 58 237 / 28%),
+		0 0 0 1px rgb(196 181 253 / 14%);
 }
+
+.purchase-button:active:not(:disabled) {
+	transform: translateY(0) scale(0.99);
+}
+
+/* =========================
+   DISABLED GUMBI
+   ========================= */
+
+.approve-button:disabled,
+.purchase-button:disabled {
+	cursor: not-allowed;
+
+	opacity: 0.5;
+
+	transform: none;
+	box-shadow: none;
+}
+
+/* =========================
+   UPOZORENJE
+   ========================= */
 
 .purchase-warning {
 	margin: 18px 0 0;
-	padding: 13px;
-	border: 1px solid #b45309;
+	padding: 13px 15px;
+
+	border: 1px solid rgb(245 158 11 / 45%);
 	border-radius: 10px;
-	background: rgb(120 53 15 / 25%);
+
+	background: rgb(120 53 15 / 18%);
 	color: #fde68a;
+
+	font-size: 13px;
+	line-height: 1.5;
 }
 
-@media (max-width: 760px) {
+/* =========================
+   KARTICE PRODAJE
+   ========================= */
+
+.purchase-card .property-item {
+	transition:
+		border-color 0.22s ease,
+		background 0.22s ease,
+		transform 0.22s ease,
+		box-shadow 0.22s ease;
+}
+
+.purchase-card .property-item:hover {
+	border-color: #51426f;
+
+	background: #111b2b;
+
+	transform: translateY(-2px);
+
+	box-shadow:
+		0 12px 28px rgb(0 0 0 / 16%),
+		0 0 0 1px rgb(139 92 246 / 5%);
+}
+
+/* =========================
+   TABLET
+   ========================= */
+
+@media (max-width: 900px) {
 	.purchase-card {
-		padding: 26px 20px;
+		padding: 28px;
+	}
+
+	.purchase-header {
+		gap: 18px;
+	}
+}
+
+/* =========================
+   MOBITEL
+   ========================= */
+
+@media (max-width: 600px) {
+	.purchase-card {
+		padding: 22px 18px;
+
+		border-radius: 16px;
 	}
 
 	.purchase-header {
 		flex-direction: column;
+		align-items: stretch;
+		gap: 16px;
 	}
 
-	.token-summary,
+	.purchase-header h2 {
+		font-size: 25px;
+	}
+
+	.purchase-header p:last-child {
+		font-size: 14px;
+	}
+
+	.purchase-header .secondary-button {
+		width: 100%;
+	}
+
+	.token-summary {
+		grid-template-columns: 1fr;
+		gap: 10px;
+
+		margin-top: 20px;
+	}
+
 	.purchase-actions {
 		grid-template-columns: 1fr;
+		gap: 10px;
+	}
+
+	.approve-button,
+	.purchase-button {
+		padding: 12px 16px;
+	}
+
+	.sale-price {
+		font-size: 13px;
 	}
 }

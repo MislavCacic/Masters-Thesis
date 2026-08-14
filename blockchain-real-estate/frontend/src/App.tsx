@@ -265,106 +265,110 @@ export default function App() {
 
 	return (
 		<main className="app">
-			<section className="wallet-card">
-				<p className="eyebrow">Blockchain kupoprodaja nekretnina</p>
+			{/* MetaMask još nije povezan */}
+			{!account && (
+				<section className="wallet-card">
+					<p className="eyebrow">Blockchain kupoprodaja nekretnina</p>
 
-				<h1>Povezivanje digitalnog novčanika</h1>
+					<h1>Povezivanje digitalnog novčanika</h1>
 
-				<p className="description">
-					Poveži MetaMask kako bi aplikacija mogla komunicirati s lokalnim
-					pametnim ugovorima.
-				</p>
+					<p className="description">
+						Poveži MetaMask kako bi aplikacija mogla komunicirati s lokalnim
+						pametnim ugovorima.
+					</p>
 
-				<button type="button" onClick={connectWallet} disabled={isConnecting}>
-					{isConnecting
-						? "Povezivanje..."
-						: account
-							? "Osvježi podatke računa"
-							: "Poveži MetaMask"}
-				</button>
+					<button type="button" onClick={connectWallet} disabled={isConnecting}>
+						{isConnecting ? "Povezivanje..." : "Poveži MetaMask"}
+					</button>
 
-				{account && (
-					<div className="connection-details">
-						<p>
-							<span>Račun</span>
+					{error && <p className="error">{error}</p>}
+				</section>
+			)}
 
-							<strong>{shortenAddress(account)}</strong>
-						</p>
-
-						<p>
-							<span>Mreža</span>
-							<strong>{networkName}</strong>
-						</p>
-
-						<p>
-							<span>Profil aplikacije</span>
-							<strong>{applicationProfile}</strong>
-						</p>
-
-						<p>
-							<span>Blockchain uloge</span>
-							<strong>{roles.join(", ")}</strong>
-						</p>
-
-						<p className="success">MetaMask je uspješno povezan.</p>
-					</div>
-				)}
-
-				{error && <p className="error">{error}</p>}
-			</section>
-
+			{/* MetaMask je povezan */}
 			{account && (
-				<DashboardNavigation
-					profile={applicationProfile}
-					activeSection={activeSection}
-					onSectionChange={setActiveSection}
-				/>
-			)}
+				<>
+					<header className="app-toolbar">
+						<div className="wallet-compact">
+							<span className="wallet-status-dot" />
 
-			{account && activeSection === "overview" && (
-				<DashboardOverview
-					account={account}
-					applicationProfile={applicationProfile}
-					onSectionChange={setActiveSection}
-				/>
-			)}
+							<div className="wallet-compact-text">
+								<strong>MetaMask povezan</strong>
 
-			{account && activeSection === "all-properties" && isAdmin && (
-				<PropertyPanel account={account} showAll />
-			)}
+								<span>
+									{shortenAddress(account)} · {networkName}
+								</span>
+							</div>
 
-			{account &&
-				activeSection === "my-properties" &&
-				(isSeller || isBuyer) && (
-					<PropertyPanel account={account} showAll={false} />
-				)}
+							<button
+								type="button"
+								className="wallet-compact-refresh"
+								onClick={connectWallet}
+								disabled={isConnecting}
+							>
+								{isConnecting ? "..." : "Osvježi"}
+							</button>
+						</div>
 
-			{account && activeSection === "register-property" && isSeller && (
-				<RegisterPropertyForm account={account} />
-			)}
+						<DashboardNavigation
+							profile={applicationProfile}
+							activeSection={activeSection}
+							onSectionChange={setActiveSection}
+						/>
 
-			{account && activeSection === "verification" && isVerifier && (
-				<VerifyPropertiesPanel account={account} />
-			)}
+						<div className="toolbar-profile">
+							<strong>{applicationProfile}</strong>
+						</div>
+					</header>
 
-			{account && activeSection === "create-sale" && isSeller && (
-				<CreateSaleForm account={account} />
-			)}
+					{error && <p className="error">{error}</p>}
 
-			{account && activeSection === "active-sales" && isSeller && (
-				<ActiveSalesPanel account={account} showAll={false} />
-			)}
+					<div className="app-content">
+						{activeSection === "overview" && (
+							<DashboardOverview
+								account={account}
+								applicationProfile={applicationProfile}
+								onSectionChange={setActiveSection}
+							/>
+						)}
 
-			{account && activeSection === "purchase" && isBuyer && (
-				<PurchaseSalePanel account={account} />
-			)}
+						{activeSection === "all-properties" && isAdmin && (
+							<PropertyPanel account={account} showAll />
+						)}
 
-			{account && activeSection === "mockeur" && isAdmin && (
-				<MintMockEURForm account={account} />
-			)}
+						{activeSection === "my-properties" && (isSeller || isBuyer) && (
+							<PropertyPanel account={account} showAll={false} />
+						)}
 
-			{account && activeSection === "history" && (
-				<TransactionHistoryPanel account={account} showAll={isAdmin} />
+						{activeSection === "register-property" && isSeller && (
+							<RegisterPropertyForm account={account} />
+						)}
+
+						{activeSection === "verification" && isVerifier && (
+							<VerifyPropertiesPanel account={account} />
+						)}
+
+						{activeSection === "create-sale" && isSeller && (
+							<CreateSaleForm account={account} />
+						)}
+
+						{activeSection === "active-sales" && isSeller && (
+							<ActiveSalesPanel account={account} showAll={false} />
+						)}
+
+						{activeSection === "purchase" && isBuyer && (
+							<PurchaseSalePanel account={account} />
+						)}
+
+						{activeSection === "mockeur" && isAdmin && (
+							<MintMockEURForm account={account} />
+						)}
+
+						{activeSection === "history" && (
+							<TransactionHistoryPanel account={account} showAll={isAdmin} />
+						)}
+					</div>
+				</>
 			)}
 		</main>
 	);

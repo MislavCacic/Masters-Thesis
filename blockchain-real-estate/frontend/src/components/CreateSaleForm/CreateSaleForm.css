@@ -1,11 +1,22 @@
 .sale-card {
-	width: min(100%, 760px);
-	padding: 36px;
-	border: 1px solid #334155;
+	width: 100%;
+	box-sizing: border-box;
+
+	padding: 32px 36px;
+
+	border: 1px solid #2f3e59;
 	border-radius: 20px;
-	background: #1e293b;
-	box-shadow: 0 24px 60px rgb(0 0 0 / 25%);
+
+	background: #1b2638;
+
+	box-shadow:
+		0 20px 50px rgb(0 0 0 / 20%),
+		inset 0 1px 0 rgb(255 255 255 / 2%);
 }
+
+/* =========================
+   ZAGLAVLJE
+   ========================= */
 
 .sale-header {
 	display: flex;
@@ -14,27 +25,154 @@
 	gap: 24px;
 }
 
+.sale-header > div {
+	min-width: 0;
+}
+
 .sale-header h2 {
 	margin: 0;
-	font-size: 32px;
+
+	color: #f8fafc;
+
+	font-size: 30px;
+	line-height: 1.2;
 }
 
 .sale-header p:last-child {
-	margin: 14px 0 0;
-	color: #cbd5e1;
+	max-width: 640px;
+
+	margin: 12px 0 0;
+
+	color: #aebbd0;
+
+	font-size: 15px;
 	line-height: 1.6;
 }
+
+/* =========================
+   FORMA
+   ========================= */
 
 .sale-form {
 	margin-top: 26px;
 }
 
-@media (max-width: 760px) {
+/* =========================
+   SELECT / INPUT HOVER
+   ========================= */
+
+.sale-card .form-field input,
+.sale-card .form-field select {
+	transition:
+		border-color 0.2s ease,
+		background 0.2s ease,
+		box-shadow 0.2s ease;
+}
+
+.sale-card .form-field input:hover,
+.sale-card .form-field select:hover {
+	border-color: #51426f;
+}
+
+.sale-card .form-field input:focus,
+.sale-card .form-field select:focus {
+	border-color: #8b5cf6;
+
+	background: #111827;
+
+	box-shadow: 0 0 0 3px rgb(139 92 246 / 14%);
+}
+
+/* =========================
+   GLAVNI GUMB
+   ========================= */
+
+.sale-card form > button {
+	border: 1px solid #7c3aed;
+	border-radius: 10px;
+
+	background: #6d28d9;
+	color: #ffffff;
+
+	font-weight: 700;
+
+	box-shadow: none;
+
+	transition:
+		background 0.2s ease,
+		border-color 0.2s ease,
+		transform 0.2s ease,
+		box-shadow 0.2s ease,
+		opacity 0.2s ease;
+}
+
+.sale-card form > button:hover:not(:disabled) {
+	border-color: #a855f7;
+
+	background: linear-gradient(135deg, #7c3aed 0%, #9333ea 55%, #a855f7 100%);
+
+	transform: translateY(-2px);
+
+	box-shadow:
+		0 10px 24px rgb(124 58 237 / 25%),
+		0 0 0 1px rgb(168 85 247 / 16%);
+}
+
+.sale-card form > button:active:not(:disabled) {
+	transform: translateY(0) scale(0.99);
+}
+
+.sale-card form > button:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+	transform: none;
+	box-shadow: none;
+}
+
+/* =========================
+   TABLET
+   ========================= */
+
+@media (max-width: 900px) {
 	.sale-card {
-		padding: 26px 20px;
+		padding: 28px;
+	}
+
+	.sale-header {
+		gap: 18px;
+	}
+}
+
+/* =========================
+   MOBITEL
+   ========================= */
+
+@media (max-width: 600px) {
+	.sale-card {
+		padding: 22px 18px;
+
+		border-radius: 16px;
 	}
 
 	.sale-header {
 		flex-direction: column;
+		align-items: stretch;
+		gap: 16px;
+	}
+
+	.sale-header h2 {
+		font-size: 25px;
+	}
+
+	.sale-header p:last-child {
+		font-size: 14px;
+	}
+
+	.sale-header .secondary-button {
+		width: 100%;
+	}
+
+	.sale-form {
+		margin-top: 20px;
 	}
 }
