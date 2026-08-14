@@ -58,16 +58,16 @@ contract PropertyRegistry is AccessControl {
     );
 
     /**
-         * @notice Događaj koji se zapisuje kada verifikator potvrdi nekretninu.
-    */
+     * @notice Događaj koji se zapisuje kada verifikator potvrdi nekretninu.
+     */
     event PropertyVerified(
         uint256 indexed propertyId,
         address indexed verifier
     );
 
     /**
-        * @notice Događaj koji se zapisuje kada verifikator odbije nekretninu.
-    */
+     * @notice Događaj koji se zapisuje kada verifikator odbije nekretninu.
+     */
     event PropertyRejected(
         uint256 indexed propertyId,
         address indexed verifier
@@ -75,8 +75,6 @@ contract PropertyRegistry is AccessControl {
 
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(VERIFIER_ROLE, msg.sender);
-        _grantRole(TRANSFER_ROLE, msg.sender);
     }
 
     /**
@@ -100,20 +98,14 @@ contract PropertyRegistry is AccessControl {
             "Katastarska opcina je obavezna"
         );
 
-        require(
-            bytes(parcelNumber).length > 0,
-            "Broj cestice je obavezan"
-        );
+        require(bytes(parcelNumber).length > 0, "Broj cestice je obavezan");
 
         require(
             bytes(propertyAddress).length > 0,
             "Adresa nekretnine je obavezna"
         );
 
-        require(
-            documentHash != bytes32(0),
-            "Hash dokumentacije nije valjan"
-        );
+        require(documentHash != bytes32(0), "Hash dokumentacije nije valjan");
 
         bytes32 parcelKey = keccak256(
             abi.encode(cadastralMunicipality, parcelNumber)
@@ -160,10 +152,7 @@ contract PropertyRegistry is AccessControl {
     function verifyProperty(
         uint256 propertyId
     ) external onlyRole(VERIFIER_ROLE) {
-        require(
-            properties[propertyId].exists,
-            "Nekretnina ne postoji"
-        );
+        require(properties[propertyId].exists, "Nekretnina ne postoji");
 
         require(
             properties[propertyId].verificationStatus ==
@@ -171,26 +160,22 @@ contract PropertyRegistry is AccessControl {
             "Nekretnina vise nije na cekanju"
         );
 
-        properties[propertyId].verificationStatus =
-            VerificationStatus.Verified;
+        properties[propertyId].verificationStatus = VerificationStatus.Verified;
 
         emit PropertyVerified(propertyId, msg.sender);
     }
 
     /**
-        * @notice Odbija nekretninu i pripadajuću dokumentaciju.
-        *
-        * Funkciju može pozvati samo korisnik s VERIFIER_ROLE ulogom.
-        *
-        * @param propertyId Jedinstveni identifikator nekretnine.
-    */ 
+     * @notice Odbija nekretninu i pripadajuću dokumentaciju.
+     *
+     * Funkciju može pozvati samo korisnik s VERIFIER_ROLE ulogom.
+     *
+     * @param propertyId Jedinstveni identifikator nekretnine.
+     */
     function rejectProperty(
         uint256 propertyId
     ) external onlyRole(VERIFIER_ROLE) {
-        require(
-            properties[propertyId].exists,
-            "Nekretnina ne postoji"
-        );
+        require(properties[propertyId].exists, "Nekretnina ne postoji");
 
         require(
             properties[propertyId].verificationStatus ==
@@ -198,29 +183,25 @@ contract PropertyRegistry is AccessControl {
             "Nekretnina vise nije na cekanju"
         );
 
-        properties[propertyId].verificationStatus =
-            VerificationStatus.Rejected;
+        properties[propertyId].verificationStatus = VerificationStatus.Rejected;
 
         emit PropertyRejected(propertyId, msg.sender);
     }
 
     /**
-        * @notice Mijenja digitalnog vlasnika potvrđene nekretnine.
-        *
-        * Funkciju može pozvati samo adresa s TRANSFER_ROLE ulogom.
-        * U konačnoj verziji tu će ulogu imati escrow pametni ugovor.
-        *
-        * @param propertyId Jedinstveni identifikator nekretnine.
-        * @param newOwner Adresa novog digitalnog vlasnika.
-    */
+     * @notice Mijenja digitalnog vlasnika potvrđene nekretnine.
+     *
+     * Funkciju može pozvati samo adresa s TRANSFER_ROLE ulogom.
+     * U konačnoj verziji tu će ulogu imati escrow pametni ugovor.
+     *
+     * @param propertyId Jedinstveni identifikator nekretnine.
+     * @param newOwner Adresa novog digitalnog vlasnika.
+     */
     function transferPropertyOwnership(
         uint256 propertyId,
         address newOwner
     ) external onlyRole(TRANSFER_ROLE) {
-        require(
-            properties[propertyId].exists,
-            "Nekretnina ne postoji"
-        );
+        require(properties[propertyId].exists, "Nekretnina ne postoji");
 
         require(
             properties[propertyId].verificationStatus ==
@@ -228,10 +209,7 @@ contract PropertyRegistry is AccessControl {
             "Nekretnina nije potvrdena"
         );
 
-        require(
-            newOwner != address(0),
-            "Adresa novog vlasnika nije valjana"
-        );
+        require(newOwner != address(0), "Adresa novog vlasnika nije valjana");
 
         address previousOwner = properties[propertyId].digitalOwner;
 
@@ -242,48 +220,39 @@ contract PropertyRegistry is AccessControl {
 
         properties[propertyId].digitalOwner = newOwner;
 
-        emit PropertyOwnershipTransferred(
-            propertyId,
-            previousOwner,
-            newOwner
-        );
+        emit PropertyOwnershipTransferred(propertyId, previousOwner, newOwner);
     }
 
     /**
-        * @notice Vraća ukupan broj registriranih nekretnina.
-        *
-        * @return Ukupan broj nekretnina u registru.
-    */
+     * @notice Vraća ukupan broj registriranih nekretnina.
+     *
+     * @return Ukupan broj nekretnina u registru.
+     */
     function getPropertyCount() external view returns (uint256) {
         return nextPropertyId - 1;
     }
 
     /**
-        * @notice Vraća adresu trenutačnog digitalnog vlasnika nekretnine.
-    */
+     * @notice Vraća adresu trenutačnog digitalnog vlasnika nekretnine.
+     */
     function getDigitalOwner(
         uint256 propertyId
     ) external view returns (address) {
-        require(
-            properties[propertyId].exists,
-            "Nekretnina ne postoji"
-        );
+        require(properties[propertyId].exists, "Nekretnina ne postoji");
 
         return properties[propertyId].digitalOwner;
     }
 
     /**
-        * @notice Provjerava je li nekretnina potvrđena.
-    */
+     * @notice Provjerava je li nekretnina potvrđena.
+     */
     function isPropertyVerified(
         uint256 propertyId
     ) external view returns (bool) {
-        require(
-            properties[propertyId].exists,
-            "Nekretnina ne postoji"
-        );
+        require(properties[propertyId].exists, "Nekretnina ne postoji");
 
-        return properties[propertyId].verificationStatus ==
+        return
+            properties[propertyId].verificationStatus ==
             VerificationStatus.Verified;
     }
 
@@ -297,17 +266,14 @@ contract PropertyRegistry is AccessControl {
     function getProperty(
         uint256 propertyId
     ) external view returns (Property memory) {
-        require(
-            properties[propertyId].exists,
-            "Nekretnina ne postoji"
-        );
+        require(properties[propertyId].exists, "Nekretnina ne postoji");
 
         return properties[propertyId];
     }
 
     /**
-        * @notice Događaj koji se zapisuje nakon promjene digitalnog vlasnika.
-    */
+     * @notice Događaj koji se zapisuje nakon promjene digitalnog vlasnika.
+     */
     event PropertyOwnershipTransferred(
         uint256 indexed propertyId,
         address indexed previousOwner,

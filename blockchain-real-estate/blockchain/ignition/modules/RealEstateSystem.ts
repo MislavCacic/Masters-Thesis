@@ -1,24 +1,41 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 
-export default buildModule("RealEstateSystemModule", (m) => {
-	// 1. Postavljanje registra nekretnina.
-	const propertyRegistry = m.contract("PropertyRegistry");
+export default buildModule("RealEstateSystem", (m) => {
+	// Account #0 ostaje administrator sustava.
+	const administrator = m.getAccount(0);
 
-	// 2. Postavljanje simuliranog euro tokena.
-	const mockEUR = m.contract("MockEUR");
+	// Account #3 postaje zasebni verifikator dokumentacije.
+	const verifier = m.getAccount(3);
 
-	// 3. Postavljanje escrow ugovora i povezivanje
-	// s registrom nekretnina i mEUR tokenom.
-	const realEstateEscrow = m.contract("RealEstateEscrow", [
-		propertyRegistry,
-		mockEUR,
-	]);
+	const propertyRegistry = m.contract("PropertyRegistry", [], {
+		from: administrator,
+	});
 
-	// 4. Čitanje identifikatora TRANSFER_ROLE uloge iz registra.
+	const mockEUR = m.contract("MockEUR", [], {
+		from: administrator,
+	});
+
+	const realEstateEscrow = m.contract(
+		"RealEstateEscrow",
+		[propertyRegistry, mockEUR],
+		{
+			from: administrator,
+		},
+	);
+
+	const verifierRole = m.staticCall(propertyRegistry, "VERIFIER_ROLE");
+
 	const transferRole = m.staticCall(propertyRegistry, "TRANSFER_ROLE");
 
-	// 5. Dodjeljivanje TRANSFER_ROLE uloge escrow ugovoru.
+	// Poseban račun dobiva pravo provjere dokumentacije.
+	m.call(propertyRegistry, "grantRole", [verifierRole, verifier], {
+		from: administrator,
+		id: "GrantVerifierRole",
+	});
+
+	// Samo escrow ugovor smije mijenjati digitalnog vlasnika.
 	m.call(propertyRegistry, "grantRole", [transferRole, realEstateEscrow], {
+		from: administrator,
 		id: "GrantTransferRoleToEscrow",
 	});
 

@@ -240,17 +240,21 @@ export default function App() {
 
 	const isAdmin = roles.includes("Administrator");
 
+	const isVerifier = roles.includes("Verifikator");
+
 	const isSeller = normalizedAccount === DEMO_ACCOUNTS.seller.toLowerCase();
 
 	const isBuyer = normalizedAccount === DEMO_ACCOUNTS.buyer.toLowerCase();
 
 	const applicationProfile = isAdmin
 		? "Administrator"
-		: isSeller
-			? "Prodavatelj"
-			: isBuyer
-				? "Kupac"
-				: "Korisnik";
+		: isVerifier
+			? "Verifikator"
+			: isSeller
+				? "Prodavatelj"
+				: isBuyer
+					? "Kupac"
+					: "Korisnik";
 
 	return (
 		<main className="app">
@@ -317,7 +321,7 @@ export default function App() {
 				<RegisterPropertyForm account={account} />
 			)}
 
-			{account && isAdmin && <VerifyPropertiesPanel account={account} />}
+			{account && isVerifier && <VerifyPropertiesPanel account={account} />}
 
 			{account && (isAdmin || isSeller) && <CreateSaleForm account={account} />}
 

@@ -6,36 +6,33 @@ import { keccak256, toBytes } from "viem";
 const { viem } = await hre.network.create();
 
 describe("PropertyRegistry", function () {
-	it("postavlja ugovor i dodjeljuje uloge administratoru", async function () {
-		// Dohvaćamo testne wallet račune lokalnog blockchaina.
-		const [deployer] = await viem.getWalletClients();
+	it("postavlja ugovor i dodjeljuje samo administratorsku ulogu deployeru", async function () {
+		const [administrator] = await viem.getWalletClients();
 
-		// Postavljamo PropertyRegistry ugovor na lokalni blockchain.
 		const propertyRegistry = await viem.deployContract("PropertyRegistry");
 
-		const deployerAddress = deployer.account.address;
+		const administratorAddress = administrator.account.address;
 
-		// Dohvaćamo identifikatore uloga iz ugovora.
-		const adminRole = await propertyRegistry.read.DEFAULT_ADMIN_ROLE();
-
-		const verifierRole = await propertyRegistry.read.VERIFIER_ROLE();
-
-		// Provjeravamo ima li deployer obje uloge.
-		const hasAdminRole = await propertyRegistry.read.hasRole([
-			adminRole,
-			deployerAddress,
+		const [adminRole, verifierRole, transferRole] = await Promise.all([
+			propertyRegistry.read.DEFAULT_ADMIN_ROLE(),
+			propertyRegistry.read.VERIFIER_ROLE(),
+			propertyRegistry.read.TRANSFER_ROLE(),
 		]);
 
-		const hasVerifierRole = await propertyRegistry.read.hasRole([
-			verifierRole,
-			deployerAddress,
+		const [hasAdminRole, hasVerifierRole, hasTransferRole] = await Promise.all([
+			propertyRegistry.read.hasRole([adminRole, administratorAddress]),
+
+			propertyRegistry.read.hasRole([verifierRole, administratorAddress]),
+
+			propertyRegistry.read.hasRole([transferRole, administratorAddress]),
 		]);
 
 		console.log("\n--- PROPERTY REGISTRY TEST ---");
 		console.log("Adresa ugovora:", propertyRegistry.address);
-		console.log("Adresa administratora:", deployerAddress);
+		console.log("Adresa administratora:", administratorAddress);
 		console.log("Ima administratorsku ulogu:", hasAdminRole);
 		console.log("Ima verifikatorsku ulogu:", hasVerifierRole);
+		console.log("Ima ulogu prijenosa vlasništva:", hasTransferRole);
 		console.log("------------------------------\n");
 
 		assert.equal(
@@ -46,8 +43,14 @@ describe("PropertyRegistry", function () {
 
 		assert.equal(
 			hasVerifierRole,
-			true,
-			"Deployer mora imati verifikatorsku ulogu",
+			false,
+			"Deployer ne smije automatski imati verifikatorsku ulogu",
+		);
+
+		assert.equal(
+			hasTransferRole,
+			false,
+			"Deployer ne smije automatski imati ulogu prijenosa vlasništva",
 		);
 	});
 
@@ -97,21 +100,43 @@ describe("PropertyRegistry", function () {
 	});
 
 	it("verifikator potvrđuje registriranu nekretninu", async function () {
+		const [administrator, seller, , verifier] = await viem.getWalletClients();
+
 		const publicClient = await viem.getPublicClient();
 
 		const propertyRegistry = await viem.deployContract("PropertyRegistry");
+
+		// Administrator posebnom računu dodjeljuje VERIFIER_ROLE.
+		const verifierRole = await propertyRegistry.read.VERIFIER_ROLE();
+
+		const grantRoleTransactionHash = await propertyRegistry.write.grantRole(
+			[verifierRole, verifier.account.address],
+			{
+				account: administrator.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: grantRoleTransactionHash,
+		});
 
 		const documentHash = keccak256(
 			toBytes("dokumentacija za provjeru nekretnine"),
 		);
 
+		// Prodavatelj registrira nekretninu.
 		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty([
-				"Vinkovci",
-				"5678/2",
-				"Ulica bana Jelačića 10, Vinkovci",
-				documentHash,
-			]);
+			await propertyRegistry.write.registerProperty(
+				[
+					"Vinkovci",
+					"5678/2",
+					"Ulica bana Jelačića 10, Vinkovci",
+					documentHash,
+				],
+				{
+					account: seller.account,
+				},
+			);
 
 		await publicClient.waitForTransactionReceipt({
 			hash: registerTransactionHash,
@@ -122,14 +147,21 @@ describe("PropertyRegistry", function () {
 		]);
 
 		console.log("\n--- PROVJERA NEKRETNINE ---");
+		console.log("Administrator:", administrator.account.address);
+		console.log("Prodavatelj:", seller.account.address);
+		console.log("Verifikator:", verifier.account.address);
 		console.log(
 			"Status prije potvrde:",
 			propertyBeforeVerification.verificationStatus,
 		);
 
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty([
-			1n,
-		]);
+		// Nekretninu potvrđuje zaseban verifikator, ne administrator.
+		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
+			[1n],
+			{
+				account: verifier.account,
+			},
+		);
 
 		await publicClient.waitForTransactionReceipt({
 			hash: verifyTransactionHash,
@@ -156,24 +188,47 @@ describe("PropertyRegistry", function () {
 			1,
 			"Status nakon potvrde mora biti Verified",
 		);
+
+		assert.equal(
+			propertyAfterVerification.digitalOwner.toLowerCase(),
+			seller.account.address.toLowerCase(),
+			"Prodavatelj mora ostati digitalni vlasnik nakon verifikacije",
+		);
 	});
 
 	it("verifikator odbija registriranu nekretninu", async function () {
+		const [administrator, seller, , verifier] = await viem.getWalletClients();
+
 		const publicClient = await viem.getPublicClient();
 
 		const propertyRegistry = await viem.deployContract("PropertyRegistry");
+
+		// Administrator posebnom računu dodjeljuje VERIFIER_ROLE.
+		const verifierRole = await propertyRegistry.read.VERIFIER_ROLE();
+
+		const grantRoleTransactionHash = await propertyRegistry.write.grantRole(
+			[verifierRole, verifier.account.address],
+			{
+				account: administrator.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: grantRoleTransactionHash,
+		});
 
 		const documentHash = keccak256(
 			toBytes("neispravna dokumentacija nekretnine"),
 		);
 
+		// Prodavatelj registrira nekretninu.
 		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty([
-				"Đakovo",
-				"9876/3",
-				"Ulica kralja Tomislava 20, Đakovo",
-				documentHash,
-			]);
+			await propertyRegistry.write.registerProperty(
+				["Đakovo", "9876/3", "Ulica kralja Tomislava 20, Đakovo", documentHash],
+				{
+					account: seller.account,
+				},
+			);
 
 		await publicClient.waitForTransactionReceipt({
 			hash: registerTransactionHash,
@@ -184,14 +239,21 @@ describe("PropertyRegistry", function () {
 		]);
 
 		console.log("\n--- ODBIJANJE NEKRETNINE ---");
+		console.log("Administrator:", administrator.account.address);
+		console.log("Prodavatelj:", seller.account.address);
+		console.log("Verifikator:", verifier.account.address);
 		console.log(
 			"Status prije odbijanja:",
 			propertyBeforeRejection.verificationStatus,
 		);
 
-		const rejectTransactionHash = await propertyRegistry.write.rejectProperty([
-			1n,
-		]);
+		// Nekretninu odbija zaseban verifikator.
+		const rejectTransactionHash = await propertyRegistry.write.rejectProperty(
+			[1n],
+			{
+				account: verifier.account,
+			},
+		);
 
 		await publicClient.waitForTransactionReceipt({
 			hash: rejectTransactionHash,
@@ -218,51 +280,85 @@ describe("PropertyRegistry", function () {
 			2,
 			"Status nakon odbijanja mora biti Rejected",
 		);
+
+		assert.equal(
+			propertyAfterRejection.digitalOwner.toLowerCase(),
+			seller.account.address.toLowerCase(),
+			"Prodavatelj mora ostati digitalni vlasnik i nakon odbijanja",
+		);
 	});
 
-	it("ne dopušta korisniku bez verifikatorske uloge potvrdu nekretnine", async function () {
-		const [, unauthorizedUser] = await viem.getWalletClients();
+	it("ne dopušta administratoru bez verifikatorske uloge potvrdu nekretnine", async function () {
+		const [administrator, seller] = await viem.getWalletClients();
+
 		const publicClient = await viem.getPublicClient();
 
 		const propertyRegistry = await viem.deployContract("PropertyRegistry");
 
+		const verifierRole = await propertyRegistry.read.VERIFIER_ROLE();
+
+		const administratorHasVerifierRole = await propertyRegistry.read.hasRole([
+			verifierRole,
+			administrator.account.address,
+		]);
+
+		assert.equal(
+			administratorHasVerifierRole,
+			false,
+			"Administrator ne smije automatski imati VERIFIER_ROLE",
+		);
+
 		const documentHash = keccak256(
-			toBytes("dokumentacija za test neovlastenog korisnika"),
+			toBytes("dokumentacija za test neovlaštene administratorske potvrde"),
 		);
 
 		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty([
-				"Osijek",
-				"2222/4",
-				"Kapucinska ulica 10, Osijek",
-				documentHash,
-			]);
+			await propertyRegistry.write.registerProperty(
+				["Osijek", "2222/4", "Kapucinska ulica 10, Osijek", documentHash],
+				{
+					account: seller.account,
+				},
+			);
 
 		await publicClient.waitForTransactionReceipt({
 			hash: registerTransactionHash,
 		});
 
-		console.log("\n--- NEOVLASTENA POTVRDA ---");
+		const propertyBeforeAttempt = await propertyRegistry.read.getProperty([1n]);
+
+		console.log("\n--- NEOVLAŠTENA POTVRDA ADMINISTRATORA ---");
+		console.log("Administrator:", administrator.account.address);
+		console.log("Ima VERIFIER_ROLE:", administratorHasVerifierRole);
 		console.log(
-			"Adresa neovlastenog korisnika:",
-			unauthorizedUser.account.address,
+			"Status prije pokušaja:",
+			propertyBeforeAttempt.verificationStatus,
 		);
 
 		await assert.rejects(async () => {
 			await propertyRegistry.write.verifyProperty([1n], {
-				account: unauthorizedUser.account,
+				account: administrator.account,
 			});
 		});
 
-		const property = await propertyRegistry.read.getProperty([1n]);
+		const propertyAfterAttempt = await propertyRegistry.read.getProperty([1n]);
 
 		console.log(
-			"Status nakon neuspjelog pokusaja:",
-			property.verificationStatus,
+			"Status nakon neuspjelog pokušaja:",
+			propertyAfterAttempt.verificationStatus,
 		);
-		console.log("----------------------------\n");
+		console.log("------------------------------------------\n");
 
-		assert.equal(property.verificationStatus, 0, "Status mora ostati Pending");
+		assert.equal(
+			propertyAfterAttempt.verificationStatus,
+			0,
+			"Status nakon neovlaštenog pokušaja mora ostati Pending",
+		);
+
+		assert.equal(
+			propertyAfterAttempt.digitalOwner.toLowerCase(),
+			seller.account.address.toLowerCase(),
+			"Prodavatelj mora ostati digitalni vlasnik",
+		);
 	});
 
 	it("ne dopušta dvostruku registraciju iste katastarske čestice", async function () {
@@ -365,80 +461,138 @@ describe("PropertyRegistry", function () {
 		);
 	});
 
-	it("administrator dodjeljuje verifikatorsku ulogu drugom korisniku", async function () {
-		const [, newVerifier] = await viem.getWalletClients();
+	it("administrator dodjeljuje verifikatorsku ulogu posebnom računu", async function () {
+		const [administrator, , , verifier] = await viem.getWalletClients();
+
 		const publicClient = await viem.getPublicClient();
 
 		const propertyRegistry = await viem.deployContract("PropertyRegistry");
 
-		const verifierRole = await propertyRegistry.read.VERIFIER_ROLE();
-
-		const hasRoleBefore = await propertyRegistry.read.hasRole([
-			verifierRole,
-			newVerifier.account.address,
+		const [adminRole, verifierRole] = await Promise.all([
+			propertyRegistry.read.DEFAULT_ADMIN_ROLE(),
+			propertyRegistry.read.VERIFIER_ROLE(),
 		]);
+
+		const [administratorHasAdminRole, verifierHasRoleBefore] =
+			await Promise.all([
+				propertyRegistry.read.hasRole([
+					adminRole,
+					administrator.account.address,
+				]),
+
+				propertyRegistry.read.hasRole([verifierRole, verifier.account.address]),
+			]);
 
 		console.log("\n--- DODJELA VERIFIKATORSKE ULOGE ---");
-		console.log("Adresa novog verifikatora:", newVerifier.account.address);
-		console.log("Ima ulogu prije dodjele:", hasRoleBefore);
+		console.log("Administrator:", administrator.account.address);
+		console.log("Novi verifikator:", verifier.account.address);
+		console.log(
+			"Administrator ima administratorsku ulogu:",
+			administratorHasAdminRole,
+		);
+		console.log("Verifikator ima ulogu prije dodjele:", verifierHasRoleBefore);
 
-		const grantRoleTransactionHash = await propertyRegistry.write.grantRole([
-			verifierRole,
-			newVerifier.account.address,
-		]);
+		assert.equal(
+			administratorHasAdminRole,
+			true,
+			"Račun koji dodjeljuje ulogu mora biti administrator",
+		);
+
+		assert.equal(
+			verifierHasRoleBefore,
+			false,
+			"Verifikator prije dodjele ne smije imati VERIFIER_ROLE",
+		);
+
+		const grantRoleTransactionHash = await propertyRegistry.write.grantRole(
+			[verifierRole, verifier.account.address],
+			{
+				account: administrator.account,
+			},
+		);
 
 		await publicClient.waitForTransactionReceipt({
 			hash: grantRoleTransactionHash,
 		});
 
-		const hasRoleAfter = await propertyRegistry.read.hasRole([
+		const verifierHasRoleAfter = await propertyRegistry.read.hasRole([
 			verifierRole,
-			newVerifier.account.address,
+			verifier.account.address,
 		]);
 
-		console.log("Ima ulogu nakon dodjele:", hasRoleAfter);
+		console.log("Verifikator ima ulogu nakon dodjele:", verifierHasRoleAfter);
 		console.log("------------------------------------\n");
 
 		assert.equal(
-			hasRoleBefore,
-			false,
-			"Korisnik prije dodjele ne smije imati verifikatorsku ulogu",
-		);
-
-		assert.equal(
-			hasRoleAfter,
+			verifierHasRoleAfter,
 			true,
-			"Korisnik nakon dodjele mora imati verifikatorsku ulogu",
+			"Verifikator nakon dodjele mora imati VERIFIER_ROLE",
 		);
 	});
 
-	it("prenosi digitalno vlasništvo potvrđene nekretnine na novog vlasnika", async function () {
-		const [, buyer] = await viem.getWalletClients();
+	it("račun s transfer ulogom prenosi digitalno vlasništvo potvrđene nekretnine", async function () {
+		const [administrator, seller, buyer, verifier, transferAuthority] =
+			await viem.getWalletClients();
+
 		const publicClient = await viem.getPublicClient();
 
 		const propertyRegistry = await viem.deployContract("PropertyRegistry");
+
+		const [verifierRole, transferRole] = await Promise.all([
+			propertyRegistry.read.VERIFIER_ROLE(),
+			propertyRegistry.read.TRANSFER_ROLE(),
+		]);
+
+		// Administrator dodjeljuje ulogu zasebnom verifikatoru.
+		const grantVerifierRoleTransactionHash =
+			await propertyRegistry.write.grantRole(
+				[verifierRole, verifier.account.address],
+				{
+					account: administrator.account,
+				},
+			);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: grantVerifierRoleTransactionHash,
+		});
+
+		// U unit testu poseban račun simulira escrow ugovor.
+		const grantTransferRoleTransactionHash =
+			await propertyRegistry.write.grantRole(
+				[transferRole, transferAuthority.account.address],
+				{
+					account: administrator.account,
+				},
+			);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: grantTransferRoleTransactionHash,
+		});
 
 		const documentHash = keccak256(
 			toBytes("dokumentacija nekretnine za prijenos vlasništva"),
 		);
 
-		// 1. Registracija nekretnine
+		// 1. Prodavatelj registrira nekretninu.
 		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty([
-				"Osijek",
-				"3000/3",
-				"Županijska ulica 15, Osijek",
-				documentHash,
-			]);
+			await propertyRegistry.write.registerProperty(
+				["Osijek", "3000/3", "Županijska ulica 15, Osijek", documentHash],
+				{
+					account: seller.account,
+				},
+			);
 
 		await publicClient.waitForTransactionReceipt({
 			hash: registerTransactionHash,
 		});
 
-		// 2. Potvrda nekretnine
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty([
-			1n,
-		]);
+		// 2. Zasebni verifikator potvrđuje nekretninu.
+		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
+			[1n],
+			{
+				account: verifier.account,
+			},
+		);
 
 		await publicClient.waitForTransactionReceipt({
 			hash: verifyTransactionHash,
@@ -449,15 +603,20 @@ describe("PropertyRegistry", function () {
 		]);
 
 		console.log("\n--- PRIJENOS DIGITALNOG VLASNIŠTVA ---");
+		console.log("Administrator:", administrator.account.address);
+		console.log("Verifikator:", verifier.account.address);
+		console.log("Transfer autoritet:", transferAuthority.account.address);
 		console.log("Prethodni vlasnik:", propertyBeforeTransfer.digitalOwner);
 		console.log("Novi vlasnik:", buyer.account.address);
 
-		// 3. Prijenos vlasništva
+		// 3. Prijenos izvršava samo račun s TRANSFER_ROLE.
 		const transferTransactionHash =
-			await propertyRegistry.write.transferPropertyOwnership([
-				1n,
-				buyer.account.address,
-			]);
+			await propertyRegistry.write.transferPropertyOwnership(
+				[1n, buyer.account.address],
+				{
+					account: transferAuthority.account,
+				},
+			);
 
 		await publicClient.waitForTransactionReceipt({
 			hash: transferTransactionHash,
@@ -476,6 +635,12 @@ describe("PropertyRegistry", function () {
 		);
 
 		assert.equal(
+			propertyBeforeTransfer.digitalOwner.toLowerCase(),
+			seller.account.address.toLowerCase(),
+			"Prodavatelj mora biti vlasnik prije prijenosa",
+		);
+
+		assert.equal(
 			propertyAfterTransfer.digitalOwner.toLowerCase(),
 			buyer.account.address.toLowerCase(),
 			"Kupac nakon prijenosa mora biti novi digitalni vlasnik",
@@ -488,23 +653,52 @@ describe("PropertyRegistry", function () {
 		);
 	});
 
-	it("ne dopušta prijenos vlasništva nepotvrđene nekretnine", async function () {
-		const [, buyer] = await viem.getWalletClients();
+	it("ne dopušta računu s transfer ulogom prijenos nepotvrđene nekretnine", async function () {
+		const [administrator, seller, buyer, , transferAuthority] =
+			await viem.getWalletClients();
+
 		const publicClient = await viem.getPublicClient();
 
 		const propertyRegistry = await viem.deployContract("PropertyRegistry");
+
+		const transferRole = await propertyRegistry.read.TRANSFER_ROLE();
+
+		// U ovom unit testu poseban račun simulira escrow ugovor.
+		const grantTransferRoleTransactionHash =
+			await propertyRegistry.write.grantRole(
+				[transferRole, transferAuthority.account.address],
+				{
+					account: administrator.account,
+				},
+			);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: grantTransferRoleTransactionHash,
+		});
+
+		const transferAuthorityHasRole = await propertyRegistry.read.hasRole([
+			transferRole,
+			transferAuthority.account.address,
+		]);
+
+		assert.equal(
+			transferAuthorityHasRole,
+			true,
+			"Transfer autoritet mora imati TRANSFER_ROLE",
+		);
 
 		const documentHash = keccak256(
 			toBytes("dokumentacija nepotvrđene nekretnine"),
 		);
 
+		// Prodavatelj registrira nekretninu, ali je verifikator ne potvrđuje.
 		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty([
-				"Vinkovci",
-				"4000/4",
-				"Glagoljaška ulica 12, Vinkovci",
-				documentHash,
-			]);
+			await propertyRegistry.write.registerProperty(
+				["Vinkovci", "4000/4", "Glagoljaška ulica 12, Vinkovci", documentHash],
+				{
+					account: seller.account,
+				},
+			);
 
 		await publicClient.waitForTransactionReceipt({
 			hash: registerTransactionHash,
@@ -513,21 +707,31 @@ describe("PropertyRegistry", function () {
 		const propertyBeforeAttempt = await propertyRegistry.read.getProperty([1n]);
 
 		console.log("\n--- PRIJENOS NEPOTVRĐENE NEKRETNINE ---");
+		console.log("Prodavatelj:", seller.account.address);
+		console.log("Transfer autoritet:", transferAuthority.account.address);
 		console.log(
-			"Status nekretnine prije pokušaja:",
+			"Status prije pokušaja:",
 			propertyBeforeAttempt.verificationStatus,
 		);
+		console.log("Pokušaj prijenosa na:", buyer.account.address);
 
+		// Pozivatelj ima TRANSFER_ROLE, ali nekretnina nije Verified.
 		await assert.rejects(async () => {
-			await propertyRegistry.write.transferPropertyOwnership([
-				1n,
-				buyer.account.address,
-			]);
+			await propertyRegistry.write.transferPropertyOwnership(
+				[1n, buyer.account.address],
+				{
+					account: transferAuthority.account,
+				},
+			);
 		});
 
 		const propertyAfterAttempt = await propertyRegistry.read.getProperty([1n]);
 
 		console.log("Pokušaj prijenosa: odbijen");
+		console.log(
+			"Status nakon pokušaja:",
+			propertyAfterAttempt.verificationStatus,
+		);
 		console.log("Vlasnik nakon pokušaja:", propertyAfterAttempt.digitalOwner);
 		console.log("----------------------------------------\n");
 
@@ -537,6 +741,12 @@ describe("PropertyRegistry", function () {
 			"Nekretnina mora ostati u statusu Pending",
 		);
 
+		assert.equal(
+			propertyAfterAttempt.digitalOwner.toLowerCase(),
+			seller.account.address.toLowerCase(),
+			"Prodavatelj mora ostati digitalni vlasnik",
+		);
+
 		assert.notEqual(
 			propertyAfterAttempt.digitalOwner.toLowerCase(),
 			buyer.account.address.toLowerCase(),
@@ -544,33 +754,66 @@ describe("PropertyRegistry", function () {
 		);
 	});
 
-	it("ne dopušta korisniku bez transfer uloge prijenos vlasništva", async function () {
-		const [, unauthorizedUser, buyer] = await viem.getWalletClients();
+	it("ne dopušta korisniku bez transfer uloge prijenos potvrđene nekretnine", async function () {
+		const [administrator, seller, buyer, verifier, unauthorizedUser] =
+			await viem.getWalletClients();
+
 		const publicClient = await viem.getPublicClient();
 
 		const propertyRegistry = await viem.deployContract("PropertyRegistry");
 
-		const documentHash = keccak256(
-			toBytes("dokumentacija za test neovlastenog prijenosa"),
+		const [verifierRole, transferRole] = await Promise.all([
+			propertyRegistry.read.VERIFIER_ROLE(),
+			propertyRegistry.read.TRANSFER_ROLE(),
+		]);
+
+		// Administrator dodjeljuje VERIFIER_ROLE posebnom verifikatoru.
+		const grantVerifierRoleTransactionHash =
+			await propertyRegistry.write.grantRole(
+				[verifierRole, verifier.account.address],
+				{
+					account: administrator.account,
+				},
+			);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: grantVerifierRoleTransactionHash,
+		});
+
+		const unauthorizedUserHasTransferRole = await propertyRegistry.read.hasRole(
+			[transferRole, unauthorizedUser.account.address],
 		);
 
-		// Registracija nekretnine
+		assert.equal(
+			unauthorizedUserHasTransferRole,
+			false,
+			"Neovlašteni korisnik ne smije imati TRANSFER_ROLE",
+		);
+
+		const documentHash = keccak256(
+			toBytes("dokumentacija za test neovlaštenog prijenosa"),
+		);
+
+		// Prodavatelj registrira nekretninu.
 		const registerTransactionHash =
-			await propertyRegistry.write.registerProperty([
-				"Osijek",
-				"5000/5",
-				"Reisnerova ulica 25, Osijek",
-				documentHash,
-			]);
+			await propertyRegistry.write.registerProperty(
+				["Osijek", "5000/5", "Reisnerova ulica 25, Osijek", documentHash],
+				{
+					account: seller.account,
+				},
+			);
 
 		await publicClient.waitForTransactionReceipt({
 			hash: registerTransactionHash,
 		});
 
-		// Potvrda nekretnine
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty([
-			1n,
-		]);
+		// Zasebni verifikator potvrđuje nekretninu.
+		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
+			[1n],
+			{
+				account: verifier.account,
+			},
+		);
 
 		await publicClient.waitForTransactionReceipt({
 			hash: verifyTransactionHash,
@@ -579,10 +822,20 @@ describe("PropertyRegistry", function () {
 		const propertyBeforeAttempt = await propertyRegistry.read.getProperty([1n]);
 
 		console.log("\n--- NEOVLAŠTENI PRIJENOS VLASNIŠTVA ---");
-		console.log("Trenutni vlasnik:", propertyBeforeAttempt.digitalOwner);
+		console.log("Prodavatelj:", seller.account.address);
+		console.log("Verifikator:", verifier.account.address);
 		console.log("Neovlašteni korisnik:", unauthorizedUser.account.address);
+		console.log("Ima TRANSFER_ROLE:", unauthorizedUserHasTransferRole);
+		console.log("Status nekretnine:", propertyBeforeAttempt.verificationStatus);
 		console.log("Pokušaj prijenosa na:", buyer.account.address);
 
+		assert.equal(
+			propertyBeforeAttempt.verificationStatus,
+			1,
+			"Nekretnina prije pokušaja mora biti potvrđena",
+		);
+
+		// Nekretnina je Verified, ali pozivatelj nema TRANSFER_ROLE.
 		await assert.rejects(async () => {
 			await propertyRegistry.write.transferPropertyOwnership(
 				[1n, buyer.account.address],
@@ -597,6 +850,12 @@ describe("PropertyRegistry", function () {
 		console.log("Pokušaj neovlaštenog prijenosa: odbijen");
 		console.log("Vlasnik nakon pokušaja:", propertyAfterAttempt.digitalOwner);
 		console.log("------------------------------------------\n");
+
+		assert.equal(
+			propertyAfterAttempt.digitalOwner.toLowerCase(),
+			seller.account.address.toLowerCase(),
+			"Prodavatelj mora ostati digitalni vlasnik",
+		);
 
 		assert.equal(
 			propertyAfterAttempt.digitalOwner.toLowerCase(),

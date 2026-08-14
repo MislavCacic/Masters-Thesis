@@ -4,6 +4,79 @@ import { describe, it } from "node:test";
 
 const { viem } = await hre.network.create();
 
+async function createEscrowTestContext() {
+	const [administrator, seller, buyer, verifier, unauthorizedUser] =
+		await viem.getWalletClients();
+
+	const publicClient = await viem.getPublicClient();
+
+	const propertyRegistry = await viem.deployContract("PropertyRegistry");
+
+	const mockEUR = await viem.deployContract("MockEUR");
+
+	const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
+		propertyRegistry.address,
+		mockEUR.address,
+	]);
+
+	const verifierRole = await propertyRegistry.read.VERIFIER_ROLE();
+
+	const grantVerifierRoleTransactionHash =
+		await propertyRegistry.write.grantRole(
+			[verifierRole, verifier.account.address],
+			{
+				account: administrator.account,
+			},
+		);
+
+	await publicClient.waitForTransactionReceipt({
+		hash: grantVerifierRoleTransactionHash,
+	});
+
+	async function verifyProperty(propertyId: bigint): Promise<void> {
+		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
+			[propertyId],
+			{
+				account: verifier.account,
+			},
+		);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: verifyTransactionHash,
+		});
+	}
+
+	async function grantTransferRoleToEscrow(): Promise<void> {
+		const transferRole = await propertyRegistry.read.TRANSFER_ROLE();
+
+		const grantTransferRoleTransactionHash =
+			await propertyRegistry.write.grantRole(
+				[transferRole, realEstateEscrow.address],
+				{
+					account: administrator.account,
+				},
+			);
+
+		await publicClient.waitForTransactionReceipt({
+			hash: grantTransferRoleTransactionHash,
+		});
+	}
+
+	return {
+		administrator,
+		seller,
+		buyer,
+		verifier,
+		unauthorizedUser,
+		publicClient,
+		propertyRegistry,
+		mockEUR,
+		realEstateEscrow,
+		verifyProperty,
+		grantTransferRoleToEscrow,
+	};
+}
+
 describe("RealEstateEscrow", function () {
 	it("postavlja escrow i povezuje ga s registrom i tokenom", async function () {
 		// Postavljanje registra nekretnina.
@@ -47,17 +120,13 @@ describe("RealEstateEscrow", function () {
 	});
 
 	it("vlasnik potvrđene nekretnine kreira prodaju", async function () {
-		const [deployer, seller] = await viem.getWalletClients();
-		const publicClient = await viem.getPublicClient();
-
-		const propertyRegistry = await viem.deployContract("PropertyRegistry");
-
-		const mockEUR = await viem.deployContract("MockEUR");
-
-		const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
-			propertyRegistry.address,
-			mockEUR.address,
-		]);
+		const {
+			seller,
+			publicClient,
+			propertyRegistry,
+			realEstateEscrow,
+			verifyProperty,
+		} = await createEscrowTestContext();
 
 		const documentHash =
 			"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
@@ -78,16 +147,7 @@ describe("RealEstateEscrow", function () {
 		});
 
 		// 2. Verifikator potvrđuje nekretninu.
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
-			[1n],
-			{
-				account: deployer.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: verifyTransactionHash,
-		});
+		await verifyProperty(1n);
 
 		// 3. Vlasnik nekretnine kreira ponudu za prodaju.
 		const createSaleTransactionHash = await realEstateEscrow.write.createSale(
@@ -131,17 +191,13 @@ describe("RealEstateEscrow", function () {
 	});
 
 	it("prodavatelj otkazuje prodaju prije uplate i ponovno kreira novu prodaju", async function () {
-		const [deployer, seller] = await viem.getWalletClients();
-		const publicClient = await viem.getPublicClient();
-
-		const propertyRegistry = await viem.deployContract("PropertyRegistry");
-
-		const mockEUR = await viem.deployContract("MockEUR");
-
-		const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
-			propertyRegistry.address,
-			mockEUR.address,
-		]);
+		const {
+			seller,
+			publicClient,
+			propertyRegistry,
+			realEstateEscrow,
+			verifyProperty,
+		} = await createEscrowTestContext();
 
 		const documentHash =
 			"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
@@ -163,16 +219,7 @@ describe("RealEstateEscrow", function () {
 		});
 
 		// 2. Verifikator potvrđuje nekretninu.
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
-			[1n],
-			{
-				account: deployer.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: verifyTransactionHash,
-		});
+		await verifyProperty(1n);
 
 		// 3. Prodavatelj kreira prvu prodaju.
 		const createFirstSaleTransactionHash =
@@ -256,18 +303,14 @@ describe("RealEstateEscrow", function () {
 	});
 
 	it("ne dopušta korisniku koji nije prodavatelj otkazivanje prodaje", async function () {
-		const [deployer, seller, unauthorizedUser] = await viem.getWalletClients();
-
-		const publicClient = await viem.getPublicClient();
-
-		const propertyRegistry = await viem.deployContract("PropertyRegistry");
-
-		const mockEUR = await viem.deployContract("MockEUR");
-
-		const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
-			propertyRegistry.address,
-			mockEUR.address,
-		]);
+		const {
+			seller,
+			unauthorizedUser,
+			publicClient,
+			propertyRegistry,
+			realEstateEscrow,
+			verifyProperty,
+		} = await createEscrowTestContext();
 
 		const documentHash =
 			"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
@@ -293,16 +336,7 @@ describe("RealEstateEscrow", function () {
 		});
 
 		// 2. Verifikator potvrđuje nekretninu.
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
-			[1n],
-			{
-				account: deployer.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: verifyTransactionHash,
-		});
+		await verifyProperty(1n);
 
 		// 3. Prodavatelj kreira prodaju.
 		const createSaleTransactionHash = await realEstateEscrow.write.createSale(
@@ -356,18 +390,16 @@ describe("RealEstateEscrow", function () {
 	});
 
 	it("automatski završava kupoprodaju nakon uplate kupca", async function () {
-		const [deployer, seller, buyer] = await viem.getWalletClients();
-
-		const publicClient = await viem.getPublicClient();
-
-		const propertyRegistry = await viem.deployContract("PropertyRegistry");
-
-		const mockEUR = await viem.deployContract("MockEUR");
-
-		const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
-			propertyRegistry.address,
-			mockEUR.address,
-		]);
+		const {
+			seller,
+			buyer,
+			publicClient,
+			propertyRegistry,
+			mockEUR,
+			realEstateEscrow,
+			verifyProperty,
+			grantTransferRoleToEscrow,
+		} = await createEscrowTestContext();
 
 		const documentHash =
 			"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
@@ -389,30 +421,10 @@ describe("RealEstateEscrow", function () {
 		});
 
 		// 2. Verifikator potvrđuje nekretninu.
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
-			[1n],
-			{
-				account: deployer.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: verifyTransactionHash,
-		});
+		await verifyProperty(1n);
 
 		// 3. Escrow ugovor dobiva TRANSFER_ROLE.
-		const transferRole = await propertyRegistry.read.TRANSFER_ROLE();
-
-		const grantRoleTransactionHash = await propertyRegistry.write.grantRole(
-			[transferRole, realEstateEscrow.address],
-			{
-				account: deployer.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: grantRoleTransactionHash,
-		});
+		await grantTransferRoleToEscrow();
 
 		// 4. Prodavatelj kreira prodaju.
 		const createSaleTransactionHash = await realEstateEscrow.write.createSale(
@@ -531,17 +543,13 @@ describe("RealEstateEscrow", function () {
 	});
 
 	it("vraća točan broj kreiranih prodaja", async function () {
-		const [deployer, seller] = await viem.getWalletClients();
-		const publicClient = await viem.getPublicClient();
-
-		const propertyRegistry = await viem.deployContract("PropertyRegistry");
-
-		const mockEUR = await viem.deployContract("MockEUR");
-
-		const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
-			propertyRegistry.address,
-			mockEUR.address,
-		]);
+		const {
+			seller,
+			publicClient,
+			propertyRegistry,
+			realEstateEscrow,
+			verifyProperty,
+		} = await createEscrowTestContext();
 
 		const firstDocumentHash =
 			"0x1111111111111111111111111111111111111111111111111111111111111111";
@@ -574,22 +582,10 @@ describe("RealEstateEscrow", function () {
 		});
 
 		// Potvrda prve nekretnine.
-		const firstVerifyHash = await propertyRegistry.write.verifyProperty([1n], {
-			account: deployer.account,
-		});
-
-		await publicClient.waitForTransactionReceipt({
-			hash: firstVerifyHash,
-		});
+		await verifyProperty(1n);
 
 		// Potvrda druge nekretnine.
-		const secondVerifyHash = await propertyRegistry.write.verifyProperty([2n], {
-			account: deployer.account,
-		});
-
-		await publicClient.waitForTransactionReceipt({
-			hash: secondVerifyHash,
-		});
+		await verifyProperty(2n);
 
 		// Kreiranje prve prodaje.
 		const firstSaleHash = await realEstateEscrow.write.createSale(
@@ -629,18 +625,14 @@ describe("RealEstateEscrow", function () {
 	});
 
 	it("ne dopušta korisniku koji nije vlasnik nekretnine kreiranje prodaje", async function () {
-		const [deployer, seller, unauthorizedUser] = await viem.getWalletClients();
-
-		const publicClient = await viem.getPublicClient();
-
-		const propertyRegistry = await viem.deployContract("PropertyRegistry");
-
-		const mockEUR = await viem.deployContract("MockEUR");
-
-		const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
-			propertyRegistry.address,
-			mockEUR.address,
-		]);
+		const {
+			seller,
+			unauthorizedUser,
+			publicClient,
+			propertyRegistry,
+			realEstateEscrow,
+			verifyProperty,
+		} = await createEscrowTestContext();
 
 		const documentHash =
 			"0x3333333333333333333333333333333333333333333333333333333333333333";
@@ -666,16 +658,7 @@ describe("RealEstateEscrow", function () {
 		});
 
 		// 2. Verifikator potvrđuje nekretninu.
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
-			[1n],
-			{
-				account: deployer.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: verifyTransactionHash,
-		});
+		await verifyProperty(1n);
 
 		const currentOwner = await propertyRegistry.read.getDigitalOwner([1n]);
 
@@ -713,17 +696,8 @@ describe("RealEstateEscrow", function () {
 	});
 
 	it("ne dopušta kreiranje prodaje za nepotvrđenu nekretninu", async function () {
-		const [, seller] = await viem.getWalletClients();
-		const publicClient = await viem.getPublicClient();
-
-		const propertyRegistry = await viem.deployContract("PropertyRegistry");
-
-		const mockEUR = await viem.deployContract("MockEUR");
-
-		const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
-			propertyRegistry.address,
-			mockEUR.address,
-		]);
+		const { seller, publicClient, propertyRegistry, realEstateEscrow } =
+			await createEscrowTestContext();
 
 		const documentHash =
 			"0x4444444444444444444444444444444444444444444444444444444444444444";
@@ -787,17 +761,13 @@ describe("RealEstateEscrow", function () {
 	});
 
 	it("ne dopušta dvije aktivne prodaje za istu nekretninu", async function () {
-		const [deployer, seller] = await viem.getWalletClients();
-		const publicClient = await viem.getPublicClient();
-
-		const propertyRegistry = await viem.deployContract("PropertyRegistry");
-
-		const mockEUR = await viem.deployContract("MockEUR");
-
-		const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
-			propertyRegistry.address,
-			mockEUR.address,
-		]);
+		const {
+			seller,
+			publicClient,
+			propertyRegistry,
+			realEstateEscrow,
+			verifyProperty,
+		} = await createEscrowTestContext();
 
 		const documentHash =
 			"0x5555555555555555555555555555555555555555555555555555555555555555";
@@ -824,16 +794,7 @@ describe("RealEstateEscrow", function () {
 		});
 
 		// 2. Verifikator potvrđuje nekretninu.
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
-			[1n],
-			{
-				account: deployer.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: verifyTransactionHash,
-		});
+		await verifyProperty(1n);
 
 		// 3. Prodavatelj kreira prvu prodaju.
 		const firstSaleTransactionHash = await realEstateEscrow.write.createSale(
@@ -890,17 +851,13 @@ describe("RealEstateEscrow", function () {
 	});
 
 	it("ne dopušta kreiranje prodaje s cijenom nula", async function () {
-		const [deployer, seller] = await viem.getWalletClients();
-		const publicClient = await viem.getPublicClient();
-
-		const propertyRegistry = await viem.deployContract("PropertyRegistry");
-
-		const mockEUR = await viem.deployContract("MockEUR");
-
-		const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
-			propertyRegistry.address,
-			mockEUR.address,
-		]);
+		const {
+			seller,
+			publicClient,
+			propertyRegistry,
+			realEstateEscrow,
+			verifyProperty,
+		} = await createEscrowTestContext();
 
 		const documentHash =
 			"0x6666666666666666666666666666666666666666666666666666666666666666";
@@ -919,16 +876,7 @@ describe("RealEstateEscrow", function () {
 		});
 
 		// Verifikator potvrđuje nekretninu.
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
-			[1n],
-			{
-				account: deployer.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: verifyTransactionHash,
-		});
+		await verifyProperty(1n);
 
 		console.log("\n--- PRODAJA S CIJENOM NULA ---");
 		console.log("Pokušaj kreiranja prodaje s cijenom:", 0);
@@ -970,18 +918,15 @@ describe("RealEstateEscrow", function () {
 	});
 
 	it("poništava cijelu kupoprodaju ako escrow nema transfer ulogu", async function () {
-		const [deployer, seller, buyer] = await viem.getWalletClients();
-
-		const publicClient = await viem.getPublicClient();
-
-		const propertyRegistry = await viem.deployContract("PropertyRegistry");
-
-		const mockEUR = await viem.deployContract("MockEUR");
-
-		const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
-			propertyRegistry.address,
-			mockEUR.address,
-		]);
+		const {
+			seller,
+			buyer,
+			publicClient,
+			propertyRegistry,
+			mockEUR,
+			realEstateEscrow,
+			verifyProperty,
+		} = await createEscrowTestContext();
 
 		const documentHash =
 			"0x7777777777777777777777777777777777777777777777777777777777777777";
@@ -1003,16 +948,7 @@ describe("RealEstateEscrow", function () {
 		});
 
 		// 2. Verifikator potvrđuje nekretninu.
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
-			[1n],
-			{
-				account: deployer.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: verifyTransactionHash,
-		});
+		await verifyProperty(1n);
 
 		// Namjerno ne dodjeljujemo TRANSFER_ROLE escrow ugovoru.
 
@@ -1137,17 +1073,14 @@ describe("RealEstateEscrow", function () {
 	});
 
 	it("ne dopušta prodavatelju kupnju vlastite nekretnine", async function () {
-		const [deployer, seller] = await viem.getWalletClients();
-		const publicClient = await viem.getPublicClient();
-
-		const propertyRegistry = await viem.deployContract("PropertyRegistry");
-
-		const mockEUR = await viem.deployContract("MockEUR");
-
-		const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
-			propertyRegistry.address,
-			mockEUR.address,
-		]);
+		const {
+			seller,
+			publicClient,
+			propertyRegistry,
+			mockEUR,
+			realEstateEscrow,
+			verifyProperty,
+		} = await createEscrowTestContext();
 
 		const documentHash =
 			"0x8888888888888888888888888888888888888888888888888888888888888888";
@@ -1169,16 +1102,7 @@ describe("RealEstateEscrow", function () {
 		});
 
 		// 2. Verifikator potvrđuje nekretninu.
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
-			[1n],
-			{
-				account: deployer.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: verifyTransactionHash,
-		});
+		await verifyProperty(1n);
 
 		// 3. Prodavatelj kreira prodaju.
 		const createSaleTransactionHash = await realEstateEscrow.write.createSale(
@@ -1287,18 +1211,16 @@ describe("RealEstateEscrow", function () {
 	});
 
 	it("ne dopušta kupnju ako kupac nije odobrio dovoljan iznos tokena", async function () {
-		const [deployer, seller, buyer] = await viem.getWalletClients();
-
-		const publicClient = await viem.getPublicClient();
-
-		const propertyRegistry = await viem.deployContract("PropertyRegistry");
-
-		const mockEUR = await viem.deployContract("MockEUR");
-
-		const realEstateEscrow = await viem.deployContract("RealEstateEscrow", [
-			propertyRegistry.address,
-			mockEUR.address,
-		]);
+		const {
+			seller,
+			buyer,
+			publicClient,
+			propertyRegistry,
+			mockEUR,
+			realEstateEscrow,
+			verifyProperty,
+			grantTransferRoleToEscrow,
+		} = await createEscrowTestContext();
 
 		const documentHash =
 			"0x9999999999999999999999999999999999999999999999999999999999999999";
@@ -1321,30 +1243,10 @@ describe("RealEstateEscrow", function () {
 		});
 
 		// 2. Verifikator potvrđuje nekretninu.
-		const verifyTransactionHash = await propertyRegistry.write.verifyProperty(
-			[1n],
-			{
-				account: deployer.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: verifyTransactionHash,
-		});
+		await verifyProperty(1n);
 
 		// 3. Escrow dobiva dopuštenje za prijenos vlasništva.
-		const transferRole = await propertyRegistry.read.TRANSFER_ROLE();
-
-		const grantRoleTransactionHash = await propertyRegistry.write.grantRole(
-			[transferRole, realEstateEscrow.address],
-			{
-				account: deployer.account,
-			},
-		);
-
-		await publicClient.waitForTransactionReceipt({
-			hash: grantRoleTransactionHash,
-		});
+		await grantTransferRoleToEscrow();
 
 		// 4. Prodavatelj kreira prodaju.
 		const createSaleTransactionHash = await realEstateEscrow.write.createSale(
