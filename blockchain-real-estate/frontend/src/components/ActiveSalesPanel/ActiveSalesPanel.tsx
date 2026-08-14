@@ -1,8 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+	BrowserProvider,
+	Contract,
+	formatUnits,
+	JsonRpcProvider,
+} from "ethers";
 
-import { BrowserProvider, Contract, formatUnits } from "ethers";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
+import {
+	CONTRACT_ADDRESSES,
+	HARDHAT_CHAIN_ID,
+} from "../../blockchain/contracts";
+
 import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
 import { realEstateEscrowAbi } from "../../blockchain/realEstateEscrowAbi";
 import { getSaleStatusLabel } from "../../utils/statusLabels";
@@ -23,6 +32,8 @@ interface ActiveSale {
 	cadastralMunicipality: string;
 	parcelNumber: string;
 }
+
+const LOCAL_RPC_URL = "http://127.0.0.1:8545";
 
 function shortenAddress(address: string): string {
 	return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -62,6 +73,7 @@ export default function ActiveSalesPanel({
 	showAll,
 }: ActiveSalesPanelProps) {
 	const [activeSales, setActiveSales] = useState<ActiveSale[]>([]);
+
 	const [isLoading, setIsLoading] = useState(false);
 
 	const [processingSaleId, setProcessingSaleId] = useState<bigint | null>(null);
@@ -71,16 +83,48 @@ export default function ActiveSalesPanel({
 	const [errorMessage, setErrorMessage] = useState("");
 	const [transactionHash, setTransactionHash] = useState("");
 
+	/*
+	 * Svaki read zahtjev dobiva svoj ID.
+	 *
+	 * Ako korisnik promijeni MetaMask račun dok se
+	 * prethodni podaci još učitavaju, stari rezultat
+	 * više ne smije promijeniti stanje novog računa.
+	 */
+	const requestIdRef = useRef(0);
+
 	const loadActiveSales = useCallback(async (): Promise<void> => {
+		if (!account) {
+			setActiveSales([]);
+			setErrorMessage("");
+
+			return;
+		}
+
+		const requestId = ++requestIdRef.current;
+
 		setIsLoading(true);
 		setErrorMessage("");
 
 		try {
-			if (!window.ethereum) {
-				throw new Error("MetaMask nije pronađen u pregledniku.");
+			/*
+			 * Ovo su samo READ operacije.
+			 *
+			 * Čitamo izravno s lokalnog Hardhat RPC-a,
+			 * ne preko MetaMask BrowserProvidera.
+			 */
+			const provider = new JsonRpcProvider(LOCAL_RPC_URL);
+
+			const network = await provider.getNetwork();
+
+			if (network.chainId !== HARDHAT_CHAIN_ID) {
+				throw new Error(
+					`Neočekivana blockchain mreža. Chain ID: ${network.chainId.toString()}.`,
+				);
 			}
 
-			const provider = new BrowserProvider(window.ethereum);
+			if (requestId !== requestIdRef.current) {
+				return;
+			}
 
 			const realEstateEscrow = new Contract(
 				CONTRACT_ADDRESSES.realEstateEscrow,
@@ -96,19 +140,44 @@ export default function ActiveSalesPanel({
 
 			const saleCount = (await realEstateEscrow.getSaleCount()) as bigint;
 
+			if (requestId !== requestIdRef.current) {
+				return;
+			}
+
 			const loadedSales: ActiveSale[] = [];
+
+			const normalizedAccount = account.toLowerCase();
 
 			for (let saleId = 1n; saleId <= saleCount; saleId++) {
 				const sale = await realEstateEscrow.getSale(saleId);
+
+				if (requestId !== requestIdRef.current) {
+					return;
+				}
 
 				const exists = sale.exists as boolean;
 				const status = Number(sale.status);
 				const seller = sale.seller as string;
 
+				/*
+				 * SaleStatus:
+				 *
+				 * 0 = Created
+				 * 1 = Funded
+				 * 2 = Completed
+				 * 3 = Cancelled
+				 *
+				 * Kod našeg escrow ugovora status Funded je
+				 * samo privremen unutar iste transakcije jer se
+				 * nakon uplate kupoprodaja odmah završava.
+				 *
+				 * Zato se u UI-u kao aktivna prodaja prikazuje
+				 * samo status Created.
+				 */
 				const isCreated = status === 0;
 
 				const belongsToConnectedAccount =
-					seller.toLowerCase() === account.toLowerCase();
+					seller.toLowerCase() === normalizedAccount;
 
 				if (!exists || !isCreated || (!showAll && !belongsToConnectedAccount)) {
 					continue;
@@ -118,10 +187,17 @@ export default function ActiveSalesPanel({
 
 				const property = await propertyRegistry.getProperty(propertyId);
 
+				if (requestId !== requestIdRef.current) {
+					return;
+				}
+
 				loadedSales.push({
 					id: sale.id as bigint,
+
 					propertyId,
+
 					seller,
+
 					price: sale.price as bigint,
 
 					propertyAddress: property.propertyAddress as string,
@@ -132,26 +208,54 @@ export default function ActiveSalesPanel({
 				});
 			}
 
-			setActiveSales(loadedSales);
+			/*
+			 * Najnovije aktivne prodaje prikazujemo prve.
+			 */
+			loadedSales.sort((a, b) => {
+				if (a.id === b.id) {
+					return 0;
+				}
+
+				return a.id > b.id ? -1 : 1;
+			});
+
+			if (requestId === requestIdRef.current) {
+				setActiveSales(loadedSales);
+			}
 		} catch (error) {
-			setActiveSales([]);
-			setErrorMessage(getErrorMessage(error));
+			if (requestId === requestIdRef.current) {
+				setActiveSales([]);
+				setErrorMessage(getErrorMessage(error));
+			}
 		} finally {
-			setIsLoading(false);
+			if (requestId === requestIdRef.current) {
+				setIsLoading(false);
+			}
 		}
 	}, [account, showAll]);
 
 	useEffect(() => {
+		setActiveSales([]);
+
 		setStatusMessage("");
 		setSuccessMessage("");
 		setErrorMessage("");
 		setTransactionHash("");
 
 		void loadActiveSales();
+
+		return () => {
+			/*
+			 * Invalidiramo read zahtjev prethodnog računa
+			 * ako još nije završio.
+			 */
+			requestIdRef.current++;
+		};
 	}, [loadActiveSales]);
 
 	async function cancelSale(sale: ActiveSale): Promise<void> {
 		setProcessingSaleId(sale.id);
+
 		setStatusMessage("");
 		setSuccessMessage("");
 		setErrorMessage("");
@@ -166,16 +270,23 @@ export default function ActiveSalesPanel({
 				throw new Error("Samo prodavatelj može otkazati vlastitu prodaju.");
 			}
 
-			const provider = new BrowserProvider(window.ethereum);
+			/*
+			 * WRITE operacija:
+			 *
+			 * ovdje nam MetaMask treba jer prodavatelj
+			 * mora potpisati cancelSale transakciju.
+			 */
+			const walletProvider = new BrowserProvider(window.ethereum);
 
-			const signer = await provider.getSigner();
+			const signer = await walletProvider.getSigner();
+
 			const signerAddress = await signer.getAddress();
 
 			if (signerAddress.toLowerCase() !== account.toLowerCase()) {
 				throw new Error("MetaMask račun se promijenio. Pokušaj ponovno.");
 			}
 
-			const realEstateEscrow = new Contract(
+			const realEstateEscrowWithSigner = new Contract(
 				CONTRACT_ADDRESSES.realEstateEscrow,
 				realEstateEscrowAbi,
 				signer,
@@ -183,7 +294,7 @@ export default function ActiveSalesPanel({
 
 			setStatusMessage("Potvrdi otkazivanje prodaje u MetaMasku...");
 
-			const transaction = await realEstateEscrow.cancelSale(sale.id);
+			const transaction = await realEstateEscrowWithSigner.cancelSale(sale.id);
 
 			setTransactionHash(transaction.hash);
 
@@ -197,7 +308,19 @@ export default function ActiveSalesPanel({
 				throw new Error("Potvrda blockchain transakcije nije pronađena.");
 			}
 
-			const cancelledSale = await realEstateEscrow.getSale(sale.id);
+			/*
+			 * Nakon potvrđene WRITE transakcije stanje ponovno
+			 * provjeravamo direktno preko Hardhat RPC-a.
+			 */
+			const readProvider = new JsonRpcProvider(LOCAL_RPC_URL);
+
+			const realEstateEscrowRead = new Contract(
+				CONTRACT_ADDRESSES.realEstateEscrow,
+				realEstateEscrowAbi,
+				readProvider,
+			);
+
+			const cancelledSale = await realEstateEscrowRead.getSale(sale.id);
 
 			const cancelledStatus = Number(cancelledSale.status);
 
@@ -214,6 +337,7 @@ export default function ActiveSalesPanel({
 			await loadActiveSales();
 		} catch (error) {
 			setStatusMessage("");
+
 			setErrorMessage(getErrorMessage(error));
 		} finally {
 			setProcessingSaleId(null);

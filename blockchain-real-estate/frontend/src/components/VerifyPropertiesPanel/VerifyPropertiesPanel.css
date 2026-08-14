@@ -59,16 +59,19 @@
 
 	padding: 10px 16px;
 
-	border: 1px solid #7c3aed;
+	border: 1px solid #68415c;
 	border-radius: 10px;
 
-	background: #6d28d9;
+	background: linear-gradient(135deg, #49283f 0%, #402a52 100%);
+
 	color: #ffffff;
 
 	font-size: 12px;
 	font-weight: 700;
 
-	box-shadow: none;
+	box-shadow:
+		0 5px 14px rgb(0 0 0 / 12%),
+		inset 0 1px 0 rgb(255 255 255 / 3%);
 
 	transition:
 		background 0.22s ease,
@@ -79,19 +82,29 @@
 }
 
 .verification-header .secondary-button:hover:not(:disabled) {
-	border-color: #a855f7;
+	border-color: #8a4f78;
 
-	background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 55%, #a855f7 100%);
+	background: linear-gradient(135deg, #6f314f 0%, #654076 55%, #7440a1 100%);
 
 	transform: translateY(-2px);
 
 	box-shadow:
-		0 10px 24px rgb(124 58 237 / 25%),
-		0 0 0 1px rgb(168 85 247 / 14%);
+		0 10px 24px rgb(0 0 0 / 18%),
+		0 7px 20px rgb(124 58 237 / 15%),
+		0 0 0 1px rgb(168 85 247 / 8%);
 }
 
 .verification-header .secondary-button:active:not(:disabled) {
 	transform: translateY(0) scale(0.98);
+
+	box-shadow:
+		0 4px 10px rgb(0 0 0 / 14%),
+		inset 0 1px 3px rgb(0 0 0 / 14%);
+}
+
+.verification-header .secondary-button:focus-visible {
+	outline: 2px solid #a78bfa;
+	outline-offset: 3px;
 }
 
 /* =========================
@@ -131,7 +144,7 @@
 }
 
 /* =========================
-   POTVRDI
+   POTVRDI DOKUMENT
    ========================= */
 
 .verify-button {
@@ -139,42 +152,60 @@
 
 	padding: 13px 18px;
 
-	border: 1px solid #16a34a;
+	border: 1px solid #277a48;
 	border-radius: 10px;
 
-	background: #15803d;
+	background: linear-gradient(135deg, #214d35 0%, #1f5b39 100%);
+
 	color: #ffffff;
 
 	font-weight: 700;
 
-	box-shadow: none;
+	cursor: pointer;
+
+	box-shadow:
+		0 5px 14px rgb(0 0 0 / 12%),
+		inset 0 1px 0 rgb(255 255 255 / 3%);
 
 	transition:
 		background 0.22s ease,
 		border-color 0.22s ease,
+		color 0.22s ease,
 		transform 0.22s ease,
 		box-shadow 0.22s ease,
 		opacity 0.22s ease;
 }
 
 .verify-button:hover:not(:disabled) {
-	border-color: #4ade80;
+	border-color: #3da866;
 
-	background: linear-gradient(135deg, #15803d 0%, #16a34a 55%, #22c55e 100%);
+	background: linear-gradient(135deg, #28613f 0%, #2e7b4b 55%, #33975a 100%);
+
+	color: #ffffff;
 
 	transform: translateY(-2px);
 
 	box-shadow:
-		0 10px 24px rgb(22 163 74 / 22%),
-		0 0 0 1px rgb(74 222 128 / 12%);
+		0 10px 24px rgb(0 0 0 / 18%),
+		0 7px 20px rgb(34 197 94 / 14%),
+		0 0 0 1px rgb(74 222 128 / 8%);
 }
 
 .verify-button:active:not(:disabled) {
 	transform: translateY(0) scale(0.99);
+
+	box-shadow:
+		0 4px 10px rgb(0 0 0 / 14%),
+		inset 0 1px 3px rgb(0 0 0 / 14%);
+}
+
+.verify-button:focus-visible {
+	outline: 2px solid #4ade80;
+	outline-offset: 3px;
 }
 
 /* =========================
-   ODBIJ
+   ODBIJ DOKUMENT
    ========================= */
 
 .reject-button {
@@ -182,38 +213,56 @@
 
 	padding: 13px 18px;
 
-	border: 1px solid #dc2626;
+	border: 1px solid #85404a;
 	border-radius: 10px;
 
-	background: #b91c1c;
+	background: linear-gradient(135deg, #542a32 0%, #482832 100%);
+
 	color: #ffffff;
 
 	font-weight: 700;
 
-	box-shadow: none;
+	cursor: pointer;
+
+	box-shadow:
+		0 5px 14px rgb(0 0 0 / 12%),
+		inset 0 1px 0 rgb(255 255 255 / 3%);
 
 	transition:
 		background 0.22s ease,
 		border-color 0.22s ease,
+		color 0.22s ease,
 		transform 0.22s ease,
 		box-shadow 0.22s ease,
 		opacity 0.22s ease;
 }
 
 .reject-button:hover:not(:disabled) {
-	border-color: #f87171;
+	border-color: #b4535f;
 
-	background: linear-gradient(135deg, #b91c1c 0%, #dc2626 55%, #ef4444 100%);
+	background: linear-gradient(135deg, #7a303b 0%, #8f3745 55%, #a33f50 100%);
+
+	color: #ffffff;
 
 	transform: translateY(-2px);
 
 	box-shadow:
-		0 10px 24px rgb(220 38 38 / 22%),
-		0 0 0 1px rgb(248 113 113 / 12%);
+		0 10px 24px rgb(0 0 0 / 20%),
+		0 7px 20px rgb(153 27 27 / 18%),
+		0 0 0 1px rgb(239 68 68 / 9%);
 }
 
 .reject-button:active:not(:disabled) {
 	transform: translateY(0) scale(0.99);
+
+	box-shadow:
+		0 4px 10px rgb(0 0 0 / 14%),
+		inset 0 1px 3px rgb(0 0 0 / 16%);
+}
+
+.reject-button:focus-visible {
+	outline: 2px solid #f87171;
+	outline-offset: 3px;
 }
 
 /* =========================
@@ -225,9 +274,10 @@
 .verification-header .secondary-button:disabled {
 	cursor: not-allowed;
 
-	opacity: 0.55;
+	opacity: 0.5;
 
 	transform: none;
+
 	box-shadow: none;
 }
 
@@ -263,13 +313,21 @@
 .verification-card .blockchain-value {
 	transition:
 		border-color 0.2s ease,
-		background 0.2s ease;
+		background 0.2s ease,
+		transform 0.2s ease,
+		box-shadow 0.2s ease;
 }
 
 .verification-card .blockchain-value:hover {
 	border-color: #51426f;
 
 	background: #111827;
+
+	transform: translateY(-1px);
+
+	box-shadow:
+		0 8px 20px rgb(0 0 0 / 12%),
+		0 0 0 1px rgb(139 92 246 / 5%);
 }
 
 /* =========================

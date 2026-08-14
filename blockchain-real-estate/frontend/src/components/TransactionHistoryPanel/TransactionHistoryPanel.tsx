@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { Contract, formatUnits, JsonRpcProvider, ZeroAddress } from "ethers";
 
-import { BrowserProvider, Contract, formatUnits, ZeroAddress } from "ethers";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
+import {
+	CONTRACT_ADDRESSES,
+	HARDHAT_CHAIN_ID,
+} from "../../blockchain/contracts";
+
 import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
 import { realEstateEscrowAbi } from "../../blockchain/realEstateEscrowAbi";
 import { getSaleStatusLabel } from "../../utils/statusLabels";
@@ -26,6 +30,8 @@ interface HistoricalSale {
 	parcelNumber: string;
 	currentDigitalOwner: string;
 }
+
+const LOCAL_RPC_URL = "http://127.0.0.1:8545";
 
 function shortenAddress(address: string): string {
 	return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -63,16 +69,45 @@ export default function TransactionHistoryPanel({
 	const [isLoading, setIsLoading] = useState(false);
 	const [errorMessage, setErrorMessage] = useState("");
 
+	/*
+	 * Svako učitavanje dobiva vlastiti ID.
+	 *
+	 * Ako se MetaMask račun promijeni dok stari
+	 * blockchain zahtjev još traje, rezultat starog
+	 * zahtjeva neće prepisati podatke novog računa.
+	 */
+	const requestIdRef = useRef(0);
+
 	const loadSales = useCallback(async (): Promise<void> => {
+		if (!account) {
+			setSales([]);
+			setErrorMessage("");
+			return;
+		}
+
+		const requestId = ++requestIdRef.current;
+
 		setIsLoading(true);
 		setErrorMessage("");
 
 		try {
-			if (!window.ethereum) {
-				throw new Error("MetaMask nije pronađen u pregledniku.");
+			/*
+			 * Povijest samo čita blockchain podatke,
+			 * zato se direktno povezujemo na Hardhat RPC.
+			 */
+			const provider = new JsonRpcProvider(LOCAL_RPC_URL);
+
+			const network = await provider.getNetwork();
+
+			if (network.chainId !== HARDHAT_CHAIN_ID) {
+				throw new Error(
+					`Neočekivana blockchain mreža. Chain ID: ${network.chainId.toString()}.`,
+				);
 			}
 
-			const provider = new BrowserProvider(window.ethereum);
+			if (requestId !== requestIdRef.current) {
+				return;
+			}
 
 			const realEstateEscrow = new Contract(
 				CONTRACT_ADDRESSES.realEstateEscrow,
@@ -88,22 +123,41 @@ export default function TransactionHistoryPanel({
 
 			const saleCount = (await realEstateEscrow.getSaleCount()) as bigint;
 
+			if (requestId !== requestIdRef.current) {
+				return;
+			}
+
 			const loadedSales: HistoricalSale[] = [];
+
+			const normalizedAccount = account.toLowerCase();
 
 			for (let saleId = 1n; saleId <= saleCount; saleId++) {
 				const sale = await realEstateEscrow.getSale(saleId);
+
+				if (requestId !== requestIdRef.current) {
+					return;
+				}
 
 				const exists = sale.exists as boolean;
 				const status = Number(sale.status);
 				const seller = sale.seller as string;
 				const buyer = sale.buyer as string;
 
+				/*
+				 * SaleStatus:
+				 *
+				 * 0 = Created
+				 * 1 = Funded
+				 * 2 = Completed
+				 * 3 = Cancelled
+				 */
+
 				const isCompleted = status === 2;
 				const isCancelled = status === 3;
 
 				const belongsToConnectedAccount =
-					seller.toLowerCase() === account.toLowerCase() ||
-					buyer.toLowerCase() === account.toLowerCase();
+					seller.toLowerCase() === normalizedAccount ||
+					buyer.toLowerCase() === normalizedAccount;
 
 				if (
 					!exists ||
@@ -116,6 +170,10 @@ export default function TransactionHistoryPanel({
 				const propertyId = sale.propertyId as bigint;
 
 				const property = await propertyRegistry.getProperty(propertyId);
+
+				if (requestId !== requestIdRef.current) {
+					return;
+				}
 
 				loadedSales.push({
 					id: sale.id as bigint,
@@ -135,17 +193,45 @@ export default function TransactionHistoryPanel({
 				});
 			}
 
-			setSales(loadedSales);
+			/*
+			 * Najnovije prodaje prikazujemo prve.
+			 */
+			loadedSales.sort((a, b) => {
+				if (a.id === b.id) {
+					return 0;
+				}
+
+				return a.id > b.id ? -1 : 1;
+			});
+
+			if (requestId === requestIdRef.current) {
+				setSales(loadedSales);
+			}
 		} catch (error) {
-			setSales([]);
-			setErrorMessage(getErrorMessage(error));
+			if (requestId === requestIdRef.current) {
+				setSales([]);
+				setErrorMessage(getErrorMessage(error));
+			}
 		} finally {
-			setIsLoading(false);
+			if (requestId === requestIdRef.current) {
+				setIsLoading(false);
+			}
 		}
 	}, [account, showAll]);
 
 	useEffect(() => {
+		/*
+		 * Kod promjene računa odmah uklanjamo povijest
+		 * prethodno povezanog računa.
+		 */
+		setSales([]);
+		setErrorMessage("");
+
 		void loadSales();
+
+		return () => {
+			requestIdRef.current++;
+		};
 	}, [loadSales]);
 
 	return (
@@ -179,7 +265,9 @@ export default function TransactionHistoryPanel({
 
 			{!isLoading && sales.length === 0 && (
 				<p className="empty-state">
-					Za povezani račun nema završenih ni otkazanih prodaja.
+					{showAll
+						? "U sustavu trenutačno nema završenih ni otkazanih prodaja."
+						: "Za povezani račun nema završenih ni otkazanih prodaja."}
 				</p>
 			)}
 
@@ -187,15 +275,16 @@ export default function TransactionHistoryPanel({
 				{sales.map((sale) => {
 					const isCompleted = sale.status === 2;
 
+					const hasBuyer =
+						sale.buyer.toLowerCase() !== ZeroAddress.toLowerCase();
+
 					const ownershipTransferred =
+						hasBuyer &&
 						sale.currentDigitalOwner.toLowerCase() === sale.buyer.toLowerCase();
 
 					const ownershipRetainedBySeller =
 						sale.currentDigitalOwner.toLowerCase() ===
 						sale.seller.toLowerCase();
-
-					const hasBuyer =
-						sale.buyer.toLowerCase() !== ZeroAddress.toLowerCase();
 
 					return (
 						<article className="property-item" key={sale.id.toString()}>
@@ -222,26 +311,31 @@ export default function TransactionHistoryPanel({
 							<dl className="property-details history-details">
 								<div>
 									<dt>Nekretnina ID</dt>
+
 									<dd>{sale.propertyId.toString()}</dd>
 								</div>
 
 								<div>
 									<dt>Katastarska općina</dt>
+
 									<dd>{sale.cadastralMunicipality}</dd>
 								</div>
 
 								<div>
 									<dt>Broj čestice</dt>
+
 									<dd>{sale.parcelNumber}</dd>
 								</div>
 
 								<div>
 									<dt>Prodajna cijena</dt>
+
 									<dd>{formatUnits(sale.price, 2)} mEUR</dd>
 								</div>
 
 								<div>
 									<dt>Prodavatelj</dt>
+
 									<dd title={sale.seller}>{shortenAddress(sale.seller)}</dd>
 								</div>
 
@@ -271,7 +365,7 @@ export default function TransactionHistoryPanel({
 									<p>
 										{ownershipTransferred
 											? "Digitalno vlasništvo uspješno je preneseno na kupca."
-											: "Digitalni vlasnik ne odgovara evidentiranom kupcu."}
+											: "Nekretnina je nakon ove kupoprodaje možda naknadno prenesena drugom digitalnom vlasniku."}
 									</p>
 								</div>
 							) : (
@@ -291,7 +385,7 @@ export default function TransactionHistoryPanel({
 									<p>
 										{ownershipRetainedBySeller
 											? "Prodaja je otkazana. Digitalno vlasništvo ostalo je prodavatelju."
-											: "Nakon otkazivanja vlasništvo ne odgovara evidentiranom prodavatelju."}
+											: "Nakon otkazivanja trenutačni digitalni vlasnik nije evidentirani prodavatelj."}
 									</p>
 								</div>
 							)}

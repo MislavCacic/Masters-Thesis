@@ -1,7 +1,12 @@
-import { BrowserProvider, Contract } from "ethers";
-import { useCallback, useEffect, useState } from "react";
+import { BrowserProvider, Contract, JsonRpcProvider } from "ethers";
 
-import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import {
+	CONTRACT_ADDRESSES,
+	HARDHAT_CHAIN_ID,
+} from "../../blockchain/contracts";
+
 import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
 import { getPropertyStatusLabel } from "../../utils/statusLabels";
 
@@ -11,41 +16,111 @@ interface VerifyPropertiesPanelProps {
 	account: string;
 }
 
+const LOCAL_RPC_URL = "http://127.0.0.1:8545";
+
+const DOCUMENT_TYPE = {
+	LAND_REGISTRY_EXTRACT: 0,
+	CADASTRAL_DOCUMENT: 1,
+	OWNERSHIP_DOCUMENT: 2,
+} as const;
+
+type DocumentType = (typeof DOCUMENT_TYPE)[keyof typeof DOCUMENT_TYPE];
+
+interface PropertyDocumentData {
+	documentType: DocumentType;
+	name: string;
+	documentHash: string;
+	verificationStatus: number;
+	submitted: boolean;
+}
+
 interface PropertyData {
 	id: bigint;
 	cadastralMunicipality: string;
 	parcelNumber: string;
 	propertyAddress: string;
-	documentHash: string;
 	digitalOwner: string;
 	verificationStatus: number;
 	exists: boolean;
+	hasAllRequiredDocuments: boolean;
+	hasValidDocuments: boolean;
+	documents: PropertyDocumentData[];
 }
+
+const DOCUMENT_DEFINITIONS: {
+	type: DocumentType;
+	name: string;
+}[] = [
+	{
+		type: DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT,
+		name: "Zemljišnoknjižni izvadak",
+	},
+	{
+		type: DOCUMENT_TYPE.CADASTRAL_DOCUMENT,
+		name: "Katastarski dokument",
+	},
+	{
+		type: DOCUMENT_TYPE.OWNERSHIP_DOCUMENT,
+		name: "Dokaz / osnova vlasništva",
+	},
+];
 
 function shortenAddress(address: string): string {
 	return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function shortenHash(hash: string): string {
+	if (!hash) {
+		return "";
+	}
+
+	return `${hash.slice(0, 14)}...${hash.slice(-10)}`;
 }
 
 function getPropertyStatusClass(status: number): string {
 	switch (status) {
 		case 0:
 			return "pending";
+
 		case 1:
 			return "verified";
+
 		case 2:
 			return "rejected";
+
 		default:
 			return "unknown";
 	}
 }
 
+function getDocumentStatusLabel(document: PropertyDocumentData): string {
+	if (!document.submitted) {
+		return "Nije predan";
+	}
+
+	return getPropertyStatusLabel(document.verificationStatus);
+}
+
+function getDocumentStatusClass(document: PropertyDocumentData): string {
+	if (!document.submitted) {
+		return "unknown";
+	}
+
+	return getPropertyStatusClass(document.verificationStatus);
+}
+
 function getErrorMessage(error: unknown): string {
 	if (typeof error === "object" && error !== null) {
 		const contractError = error as {
+			code?: unknown;
 			reason?: unknown;
 			shortMessage?: unknown;
 			message?: unknown;
 		};
+
+		if (contractError.code === 4001) {
+			return "Transakcija je odbijena u MetaMasku.";
+		}
 
 		if (typeof contractError.reason === "string") {
 			return contractError.reason;
@@ -60,31 +135,65 @@ function getErrorMessage(error: unknown): string {
 		}
 	}
 
-	return "Dohvat ili verifikacija nekretnina nije uspjela.";
+	return "Dohvat ili verifikacija dokumentacije nije uspjela.";
 }
 
 export default function VerifyPropertiesPanel({
 	account,
 }: VerifyPropertiesPanelProps) {
 	const [properties, setProperties] = useState<PropertyData[]>([]);
+
 	const [isLoading, setIsLoading] = useState(false);
-	const [processingPropertyId, setProcessingPropertyId] = useState<
-		bigint | null
+
+	const [processingDocumentKey, setProcessingDocumentKey] = useState<
+		string | null
 	>(null);
+
 	const [statusMessage, setStatusMessage] = useState("");
+
 	const [successMessage, setSuccessMessage] = useState("");
+
 	const [errorMessage, setErrorMessage] = useState("");
 
+	/*
+	 * Zaštita od zastarjelih blockchain odgovora.
+	 *
+	 * Ako se MetaMask račun promijeni dok traje
+	 * prethodni zahtjev, stari rezultat više ne
+	 * smije prepisati novi prikaz.
+	 */
+	const requestIdRef = useRef(0);
+
 	const loadProperties = useCallback(async (): Promise<void> => {
+		if (!account) {
+			setProperties([]);
+
+			return;
+		}
+
+		const requestId = ++requestIdRef.current;
+
 		setIsLoading(true);
 		setErrorMessage("");
 
 		try {
-			if (!window.ethereum) {
-				throw new Error("MetaMask nije pronađen u pregledniku.");
+			/*
+			 * READ operacije ne ovise o MetaMasku.
+			 * Čitamo izravno s lokalnog Hardhat nodea.
+			 */
+			const provider = new JsonRpcProvider(LOCAL_RPC_URL);
+
+			const network = await provider.getNetwork();
+
+			if (network.chainId !== HARDHAT_CHAIN_ID) {
+				throw new Error(
+					`Neočekivana blockchain mreža. Chain ID: ${network.chainId.toString()}.`,
+				);
 			}
 
-			const provider = new BrowserProvider(window.ethereum);
+			if (requestId !== requestIdRef.current) {
+				return;
+			}
 
 			const propertyRegistry = new Contract(
 				CONTRACT_ADDRESSES.propertyRegistry,
@@ -99,40 +208,168 @@ export default function VerifyPropertiesPanel({
 
 			for (let propertyId = 1n; propertyId <= propertyCount; propertyId++) {
 				propertyRequests.push(
-					propertyRegistry.getProperty(propertyId).then((property) => ({
-						id: property.id as bigint,
-						cadastralMunicipality: property.cadastralMunicipality as string,
-						parcelNumber: property.parcelNumber as string,
-						propertyAddress: property.propertyAddress as string,
-						documentHash: property.documentHash as string,
-						digitalOwner: property.digitalOwner as string,
-						verificationStatus: Number(property.verificationStatus),
-						exists: property.exists as boolean,
-					})),
+					(async () => {
+						const [
+							property,
+							landRegistryDocument,
+							cadastralDocument,
+							ownershipDocument,
+							hasAllRequiredDocuments,
+							hasValidDocuments,
+						] = await Promise.all([
+							propertyRegistry.getProperty(propertyId),
+
+							propertyRegistry.getPropertyDocument(
+								propertyId,
+								DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT,
+							),
+
+							propertyRegistry.getPropertyDocument(
+								propertyId,
+								DOCUMENT_TYPE.CADASTRAL_DOCUMENT,
+							),
+
+							propertyRegistry.getPropertyDocument(
+								propertyId,
+								DOCUMENT_TYPE.OWNERSHIP_DOCUMENT,
+							),
+
+							propertyRegistry.hasAllRequiredDocuments(propertyId),
+
+							propertyRegistry.hasValidDocuments(propertyId),
+						]);
+
+						const documents: PropertyDocumentData[] = [
+							{
+								documentType: DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT,
+
+								name: DOCUMENT_DEFINITIONS[0].name,
+
+								documentHash: landRegistryDocument.documentHash as string,
+
+								verificationStatus: Number(
+									landRegistryDocument.verificationStatus,
+								),
+
+								submitted: landRegistryDocument.submitted as boolean,
+							},
+
+							{
+								documentType: DOCUMENT_TYPE.CADASTRAL_DOCUMENT,
+
+								name: DOCUMENT_DEFINITIONS[1].name,
+
+								documentHash: cadastralDocument.documentHash as string,
+
+								verificationStatus: Number(
+									cadastralDocument.verificationStatus,
+								),
+
+								submitted: cadastralDocument.submitted as boolean,
+							},
+
+							{
+								documentType: DOCUMENT_TYPE.OWNERSHIP_DOCUMENT,
+
+								name: DOCUMENT_DEFINITIONS[2].name,
+
+								documentHash: ownershipDocument.documentHash as string,
+
+								verificationStatus: Number(
+									ownershipDocument.verificationStatus,
+								),
+
+								submitted: ownershipDocument.submitted as boolean,
+							},
+						];
+
+						return {
+							id: property.id as bigint,
+
+							cadastralMunicipality: property.cadastralMunicipality as string,
+
+							parcelNumber: property.parcelNumber as string,
+
+							propertyAddress: property.propertyAddress as string,
+
+							digitalOwner: property.digitalOwner as string,
+
+							verificationStatus: Number(property.verificationStatus),
+
+							exists: property.exists as boolean,
+
+							hasAllRequiredDocuments: hasAllRequiredDocuments as boolean,
+
+							hasValidDocuments: hasValidDocuments as boolean,
+
+							documents,
+						};
+					})(),
 				);
 			}
 
 			const loadedProperties = await Promise.all(propertyRequests);
 
-			setProperties(loadedProperties.filter((property) => property.exists));
+			if (requestId !== requestIdRef.current) {
+				return;
+			}
+
+			setProperties(
+				loadedProperties
+					.filter((property) => property.exists)
+					.sort((a, b) => {
+						if (a.id === b.id) {
+							return 0;
+						}
+
+						return a.id > b.id ? -1 : 1;
+					}),
+			);
 		} catch (error) {
-			setErrorMessage(getErrorMessage(error));
+			if (requestId === requestIdRef.current) {
+				setProperties([]);
+
+				setErrorMessage(getErrorMessage(error));
+			}
 		} finally {
-			setIsLoading(false);
+			if (requestId === requestIdRef.current) {
+				setIsLoading(false);
+			}
 		}
-	}, []);
+	}, [account]);
 
 	useEffect(() => {
-		void loadProperties();
-	}, [account, loadProperties]);
+		setProperties([]);
 
-	async function updateVerificationStatus(
+		setStatusMessage("");
+
+		setSuccessMessage("");
+
+		setErrorMessage("");
+
+		setProcessingDocumentKey(null);
+
+		void loadProperties();
+
+		return () => {
+			requestIdRef.current++;
+		};
+	}, [loadProperties]);
+
+	async function updateDocumentVerificationStatus(
 		propertyId: bigint,
+		documentType: DocumentType,
+		documentName: string,
 		action: "verify" | "reject",
 	): Promise<void> {
-		setProcessingPropertyId(propertyId);
+		const documentKey = `${propertyId.toString()}-${documentType}`;
+
+		setProcessingDocumentKey(documentKey);
+
 		setStatusMessage("");
+
 		setSuccessMessage("");
+
 		setErrorMessage("");
 
 		try {
@@ -140,16 +377,63 @@ export default function VerifyPropertiesPanel({
 				throw new Error("MetaMask nije pronađen u pregledniku.");
 			}
 
-			const provider = new BrowserProvider(window.ethereum);
+			/*
+			 * Prije WRITE transakcije provjeravamo
+			 * aktualno stanje dokumenta direktno
+			 * s Hardhat nodea.
+			 */
+			const readProvider = new JsonRpcProvider(LOCAL_RPC_URL);
 
-			const signer = await provider.getSigner();
+			const readNetwork = await readProvider.getNetwork();
+
+			if (readNetwork.chainId !== HARDHAT_CHAIN_ID) {
+				throw new Error("Hardhat local mreža nije dostupna.");
+			}
+
+			const propertyRegistryRead = new Contract(
+				CONTRACT_ADDRESSES.propertyRegistry,
+				propertyRegistryAbi,
+				readProvider,
+			);
+
+			const property = await propertyRegistryRead.getProperty(propertyId);
+
+			if (!(property.exists as boolean)) {
+				throw new Error("Nekretnina više ne postoji u registru.");
+			}
+
+			const documentBefore = await propertyRegistryRead.getPropertyDocument(
+				propertyId,
+				documentType,
+			);
+
+			const submittedBefore = documentBefore.submitted as boolean;
+
+			const statusBefore = Number(documentBefore.verificationStatus);
+
+			if (!submittedBefore) {
+				throw new Error("Dokument nije predan i nije ga moguće verificirati.");
+			}
+
+			if (statusBefore !== 0) {
+				throw new Error("Dokument više nije u statusu Na čekanju.");
+			}
+
+			/*
+			 * BrowserProvider koristimo isključivo
+			 * za MetaMask potpis WRITE operacije.
+			 */
+			const browserProvider = new BrowserProvider(window.ethereum);
+
+			const signer = await browserProvider.getSigner();
+
 			const signerAddress = await signer.getAddress();
 
 			if (signerAddress.toLowerCase() !== account.toLowerCase()) {
 				throw new Error("MetaMask račun se promijenio. Pokušaj ponovno.");
 			}
 
-			const propertyRegistry = new Contract(
+			const propertyRegistryWrite = new Contract(
 				CONTRACT_ADDRESSES.propertyRegistry,
 				propertyRegistryAbi,
 				signer,
@@ -157,33 +441,100 @@ export default function VerifyPropertiesPanel({
 
 			const actionText = action === "verify" ? "potvrdu" : "odbijanje";
 
-			setStatusMessage(`Potvrdi ${actionText} nekretnine u MetaMasku...`);
+			setStatusMessage(
+				`Potvrdi ${actionText} dokumenta "${documentName}" u MetaMasku...`,
+			);
 
 			const transaction =
 				action === "verify"
-					? await propertyRegistry.verifyProperty(propertyId)
-					: await propertyRegistry.rejectProperty(propertyId);
+					? await propertyRegistryWrite.verifyPropertyDocument(
+							propertyId,
+							documentType,
+						)
+					: await propertyRegistryWrite.rejectPropertyDocument(
+							propertyId,
+							documentType,
+						);
 
 			setStatusMessage(
 				"Transakcija je poslana. Čeka se potvrda blockchaina...",
 			);
 
-			await transaction.wait();
+			const receipt = await transaction.wait();
+
+			if (!receipt) {
+				throw new Error("Potvrda blockchain transakcije nije pronađena.");
+			}
+
+			/*
+			 * Nakon MetaMask transakcije ponovno
+			 * čitamo dokument izravno s blockchaina.
+			 */
+			const postTransactionProvider = new JsonRpcProvider(LOCAL_RPC_URL);
+
+			const propertyRegistryPost = new Contract(
+				CONTRACT_ADDRESSES.propertyRegistry,
+				propertyRegistryAbi,
+				postTransactionProvider,
+			);
+
+			const documentAfter = await propertyRegistryPost.getPropertyDocument(
+				propertyId,
+				documentType,
+			);
+
+			const submittedAfter = documentAfter.submitted as boolean;
+
+			const statusAfter = Number(documentAfter.verificationStatus);
+
+			if (!submittedAfter) {
+				throw new Error("Blockchain više ne evidentira dokument kao predan.");
+			}
+
+			const expectedStatus = action === "verify" ? 1 : 2;
+
+			if (statusAfter !== expectedStatus) {
+				throw new Error(
+					action === "verify"
+						? "Blockchain nije evidentirao dokument kao potvrđen."
+						: "Blockchain nije evidentirao dokument kao odbijen.",
+				);
+			}
+
+			/*
+			 * Ako se upravo potvrđuje treći dokument,
+			 * PropertyRegistry sam mora automatski
+			 * označiti cijelu dokumentaciju valjanom.
+			 */
+			const [hasAllRequiredDocuments, hasValidDocuments] = await Promise.all([
+				propertyRegistryPost.hasAllRequiredDocuments(
+					propertyId,
+				) as Promise<boolean>,
+
+				propertyRegistryPost.hasValidDocuments(propertyId) as Promise<boolean>,
+			]);
 
 			setStatusMessage("");
 
-			setSuccessMessage(
-				action === "verify"
-					? `Nekretnina ID ${propertyId.toString()} uspješno je potvrđena.`
-					: `Nekretnina ID ${propertyId.toString()} uspješno je odbijena.`,
-			);
+			if (action === "verify" && hasAllRequiredDocuments && hasValidDocuments) {
+				setSuccessMessage(
+					`${documentName} za nekretninu ID ${propertyId.toString()} uspješno je potvrđen. Sva 3 obvezna dokumenta sada su potvrđena i nekretnina je spremna za prodaju.`,
+				);
+			} else {
+				setSuccessMessage(
+					action === "verify"
+						? `${documentName} za nekretninu ID ${propertyId.toString()} uspješno je potvrđen.`
+						: `${documentName} za nekretninu ID ${propertyId.toString()} uspješno je odbijen.`,
+				);
+			}
 
 			await loadProperties();
 		} catch (error) {
 			setStatusMessage("");
+
 			setErrorMessage(getErrorMessage(error));
 		} finally {
-			setProcessingPropertyId(null);
+			setProcessingDocumentKey(null);
 		}
 	}
 
@@ -196,8 +547,8 @@ export default function VerifyPropertiesPanel({
 					<h2>Registrirane nekretnine</h2>
 
 					<p>
-						Verifikator pregledava podatke i hash dokumentacije te potvrđuje ili
-						odbija registriranu nekretninu.
+						Verifikator provjerava svaki obvezni dokument zasebno. Nekretnina
+						postaje spremna za prodaju tek kada su sva tri dokumenta potvrđena.
 					</p>
 				</div>
 
@@ -205,7 +556,7 @@ export default function VerifyPropertiesPanel({
 					type="button"
 					className="secondary-button"
 					onClick={() => void loadProperties()}
-					disabled={isLoading}
+					disabled={isLoading || processingDocumentKey !== null}
 				>
 					{isLoading ? "Učitavanje..." : "Osvježi popis"}
 				</button>
@@ -213,7 +564,7 @@ export default function VerifyPropertiesPanel({
 
 			{isLoading && properties.length === 0 && (
 				<p className="transaction-status">
-					Učitavaju se nekretnine s blockchaina...
+					Učitavaju se nekretnine i dokumentacija s blockchaina...
 				</p>
 			)}
 
@@ -223,17 +574,22 @@ export default function VerifyPropertiesPanel({
 
 			<div className="property-list">
 				{properties.map((property) => {
-					const statusLabel = getPropertyStatusLabel(
+					const propertyStatusLabel = getPropertyStatusLabel(
 						property.verificationStatus,
 					);
 
-					const statusClass = getPropertyStatusClass(
+					const propertyStatusClass = getPropertyStatusClass(
 						property.verificationStatus,
 					);
 
-					const isPending = property.verificationStatus === 0;
+					const submittedDocumentCount = property.documents.filter(
+						(document) => document.submitted,
+					).length;
 
-					const isProcessing = processingPropertyId === property.id;
+					const verifiedDocumentCount = property.documents.filter(
+						(document) =>
+							document.submitted && document.verificationStatus === 1,
+					).length;
 
 					return (
 						<article className="property-item" key={property.id.toString()}>
@@ -246,61 +602,157 @@ export default function VerifyPropertiesPanel({
 									<h3>{property.propertyAddress}</h3>
 								</div>
 
-								<span className={`status-badge status-${statusClass}`}>
-									{statusLabel}
+								<span className={`status-badge status-${propertyStatusClass}`}>
+									{propertyStatusLabel}
 								</span>
 							</div>
 
 							<dl className="property-details">
 								<div>
 									<dt>Katastarska općina</dt>
+
 									<dd>{property.cadastralMunicipality}</dd>
 								</div>
 
 								<div>
 									<dt>Broj čestice</dt>
+
 									<dd>{property.parcelNumber}</dd>
 								</div>
 
 								<div>
 									<dt>Digitalni vlasnik</dt>
+
 									<dd title={property.digitalOwner}>
 										{shortenAddress(property.digitalOwner)}
 									</dd>
 								</div>
 							</dl>
 
-							<div className="blockchain-value">
-								<span>Hash dokumentacije</span>
+							<dl className="property-details">
+								<div>
+									<dt>Dokumenti predani</dt>
 
-								<code>{property.documentHash}</code>
+									<dd>
+										{submittedDocumentCount}
+										/3
+									</dd>
+								</div>
+
+								<div>
+									<dt>Dokumenti potvrđeni</dt>
+
+									<dd>
+										{verifiedDocumentCount}
+										/3
+									</dd>
+								</div>
+
+								<div>
+									<dt>Spremna za prodaju</dt>
+
+									<dd>{property.hasValidDocuments ? "DA" : "NE"}</dd>
+								</div>
+							</dl>
+
+							<div className="property-list">
+								{property.documents.map((document) => {
+									const documentStatusLabel = getDocumentStatusLabel(document);
+
+									const documentStatusClass = getDocumentStatusClass(document);
+
+									const documentKey = `${property.id.toString()}-${document.documentType}`;
+
+									const isProcessing = processingDocumentKey === documentKey;
+
+									const isAnyProcessing = processingDocumentKey !== null;
+
+									const isPending =
+										document.submitted && document.verificationStatus === 0;
+
+									return (
+										<div className="property-item" key={documentKey}>
+											<div className="property-item-heading">
+												<div>
+													<span className="property-id">Obvezni dokument</span>
+
+													<h3>{document.name}</h3>
+												</div>
+
+												<span
+													className={`status-badge status-${documentStatusClass}`}
+												>
+													{documentStatusLabel}
+												</span>
+											</div>
+
+											{document.submitted ? (
+												<div className="blockchain-value">
+													<span>Hash dokumenta</span>
+
+													<code title={document.documentHash}>
+														{shortenHash(document.documentHash)}
+													</code>
+												</div>
+											) : (
+												<p className="empty-state">Dokument još nije predan.</p>
+											)}
+
+											{isPending && (
+												<div className="verification-actions">
+													<button
+														type="button"
+														className="verify-button"
+														disabled={isAnyProcessing}
+														onClick={() =>
+															void updateDocumentVerificationStatus(
+																property.id,
+																document.documentType,
+																document.name,
+																"verify",
+															)
+														}
+													>
+														{isProcessing ? "Obrada..." : "Potvrdi dokument"}
+													</button>
+
+													<button
+														type="button"
+														className="reject-button"
+														disabled={isAnyProcessing}
+														onClick={() =>
+															void updateDocumentVerificationStatus(
+																property.id,
+																document.documentType,
+																document.name,
+																"reject",
+															)
+														}
+													>
+														{isProcessing ? "Obrada..." : "Odbij dokument"}
+													</button>
+												</div>
+											)}
+										</div>
+									);
+								})}
 							</div>
 
-							{isPending && (
-								<div className="verification-actions">
-									<button
-										type="button"
-										className="verify-button"
-										disabled={isProcessing}
-										onClick={() =>
-											void updateVerificationStatus(property.id, "verify")
-										}
-									>
-										{isProcessing ? "Obrada..." : "Potvrdi"}
-									</button>
+							<div className="transaction-result">
+								<strong>Status dokumentacije</strong>
 
-									<button
-										type="button"
-										className="reject-button"
-										disabled={isProcessing}
-										onClick={() =>
-											void updateVerificationStatus(property.id, "reject")
-										}
-									>
-										{isProcessing ? "Obrada..." : "Odbij"}
-									</button>
-								</div>
-							)}
+								<p>
+									{property.hasAllRequiredDocuments
+										? "Sva 3 obvezna dokumenta su predana."
+										: "Nisu predana sva 3 obvezna dokumenta."}
+								</p>
+
+								<p>
+									{property.hasValidDocuments
+										? "Sva dokumentacija je potvrđena. Nekretnina je spremna za prodaju."
+										: "Nekretnina još nije spremna za prodaju."}
+								</p>
+							</div>
 						</article>
 					);
 				})}
@@ -311,6 +763,7 @@ export default function VerifyPropertiesPanel({
 			{successMessage && (
 				<div className="transaction-result success-result">
 					<strong>Uspješna transakcija</strong>
+
 					<p>{successMessage}</p>
 				</div>
 			)}

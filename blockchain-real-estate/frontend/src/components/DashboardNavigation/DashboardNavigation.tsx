@@ -25,31 +25,83 @@ interface NavigationItem {
 
 const navigationByProfile: Record<string, NavigationItem[]> = {
 	Administrator: [
-		{ id: "overview", label: "Pregled" },
-		{ id: "all-properties", label: "Sve nekretnine" },
-		{ id: "mockeur", label: "MockEUR" },
-		{ id: "history", label: "Povijest" },
+		{
+			id: "overview",
+			label: "Pregled",
+		},
+		{
+			id: "all-properties",
+			label: "Sve nekretnine",
+		},
+		{
+			id: "active-sales",
+			label: "Aktivne prodaje",
+		},
+		{
+			id: "mockeur",
+			label: "MockEUR",
+		},
+		{
+			id: "history",
+			label: "Povijest",
+		},
 	],
 
 	Verifikator: [
-		{ id: "overview", label: "Pregled" },
-		{ id: "verification", label: "Verifikacija" },
+		{
+			id: "overview",
+			label: "Pregled",
+		},
+		{
+			id: "verification",
+			label: "Verifikacija",
+		},
 	],
 
 	Prodavatelj: [
-		{ id: "overview", label: "Pregled" },
-		{ id: "my-properties", label: "Moje nekretnine" },
-		{ id: "register-property", label: "Registracija" },
-		{ id: "create-sale", label: "Kreiranje prodaje" },
-		{ id: "active-sales", label: "Aktivne prodaje" },
-		{ id: "history", label: "Povijest" },
+		{
+			id: "overview",
+			label: "Pregled",
+		},
+		{
+			id: "my-properties",
+			label: "Moje nekretnine",
+		},
+		{
+			id: "register-property",
+			label: "Registracija",
+		},
+		{
+			id: "create-sale",
+			label: "Kreiranje prodaje",
+		},
+		{
+			id: "active-sales",
+			label: "Aktivne prodaje",
+		},
+		{
+			id: "history",
+			label: "Povijest",
+		},
 	],
 
 	Kupac: [
-		{ id: "overview", label: "Pregled" },
-		{ id: "my-properties", label: "Moje nekretnine" },
-		{ id: "purchase", label: "Kupnja" },
-		{ id: "history", label: "Povijest" },
+		{
+			id: "overview",
+			label: "Pregled",
+		},
+		{
+			id: "my-properties",
+			label: "Moje nekretnine",
+		},
+		{
+			id: "purchase",
+			label: "Kupnja",
+		},
+		{
+			id: "history",
+			label: "Povijest",
+		},
 	],
 };
 
@@ -59,7 +111,10 @@ export default function DashboardNavigation({
 	onSectionChange,
 }: DashboardNavigationProps) {
 	const navigationItems = navigationByProfile[profile] ?? [
-		{ id: "overview" as DashboardSection, label: "Pregled" },
+		{
+			id: "overview" as DashboardSection,
+			label: "Pregled",
+		},
 	];
 
 	return (

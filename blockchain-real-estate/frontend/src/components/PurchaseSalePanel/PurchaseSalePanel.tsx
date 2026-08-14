@@ -1,8 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+	BrowserProvider,
+	Contract,
+	formatUnits,
+	JsonRpcProvider,
+} from "ethers";
 
-import { BrowserProvider, Contract, formatUnits } from "ethers";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
+import {
+	CONTRACT_ADDRESSES,
+	HARDHAT_CHAIN_ID,
+} from "../../blockchain/contracts";
+
 import { mockEURAbi } from "../../blockchain/mockEURAbi";
 import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
 import { realEstateEscrowAbi } from "../../blockchain/realEstateEscrowAbi";
@@ -14,6 +23,17 @@ interface PurchaseSalePanelProps {
 	account: string;
 }
 
+interface PurchaseConditions {
+	saleExists: boolean;
+	saleActive: boolean;
+	documentsValid: boolean;
+	sellerIsOwner: boolean;
+	buyerIsNotSeller: boolean;
+	buyerHasSufficientBalance: boolean;
+	buyerHasSufficientAllowance: boolean;
+	readyForPurchase: boolean;
+}
+
 interface ActiveSale {
 	id: bigint;
 	propertyId: bigint;
@@ -22,10 +42,21 @@ interface ActiveSale {
 	propertyAddress: string;
 	cadastralMunicipality: string;
 	parcelNumber: string;
+	conditions: PurchaseConditions;
 }
+
+const LOCAL_RPC_URL = "http://127.0.0.1:8545";
 
 function shortenAddress(address: string): string {
 	return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function getConditionLabel(value: boolean): string {
+	return value ? "Zadovoljeno" : "Nije zadovoljeno";
+}
+
+function getConditionClass(value: boolean): string {
+	return value ? "verified" : "rejected";
 }
 
 function getErrorMessage(error: unknown): string {
@@ -61,26 +92,64 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 	const [sales, setSales] = useState<ActiveSale[]>([]);
 
 	const [buyerBalance, setBuyerBalance] = useState<bigint>(0n);
+
 	const [escrowAllowance, setEscrowAllowance] = useState<bigint>(0n);
 
 	const [isLoading, setIsLoading] = useState(false);
+
 	const [processingAction, setProcessingAction] = useState("");
 
 	const [statusMessage, setStatusMessage] = useState("");
+
 	const [successMessage, setSuccessMessage] = useState("");
+
 	const [errorMessage, setErrorMessage] = useState("");
+
 	const [transactionHash, setTransactionHash] = useState("");
 
+	/*
+	 * Svako učitavanje dobiva vlastiti ID.
+	 *
+	 * Ako se MetaMask račun promijeni dok prethodni
+	 * blockchain zahtjev još traje, stari rezultat
+	 * ne smije prepisati podatke novog računa.
+	 */
+	const requestIdRef = useRef(0);
+
 	const loadPurchaseData = useCallback(async (): Promise<void> => {
+		if (!account) {
+			setSales([]);
+			setBuyerBalance(0n);
+			setEscrowAllowance(0n);
+
+			return;
+		}
+
+		const requestId = ++requestIdRef.current;
+
 		setIsLoading(true);
 		setErrorMessage("");
 
 		try {
-			if (!window.ethereum) {
-				throw new Error("MetaMask nije pronađen u pregledniku.");
+			/*
+			 * Sve READ operacije čitamo izravno
+			 * s lokalnog Hardhat RPC-a.
+			 *
+			 * Za njih MetaMask nije potreban.
+			 */
+			const provider = new JsonRpcProvider(LOCAL_RPC_URL);
+
+			const network = await provider.getNetwork();
+
+			if (network.chainId !== HARDHAT_CHAIN_ID) {
+				throw new Error(
+					`Neočekivana blockchain mreža. Chain ID: ${network.chainId.toString()}.`,
+				);
 			}
 
-			const provider = new BrowserProvider(window.ethereum);
+			if (requestId !== requestIdRef.current) {
+				return;
+			}
 
 			const mockEUR = new Contract(
 				CONTRACT_ADDRESSES.mockEUR,
@@ -111,22 +180,45 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 				realEstateEscrow.getSaleCount() as Promise<bigint>,
 			]);
 
-			setBuyerBalance(balance);
-			setEscrowAllowance(allowance);
+			if (requestId !== requestIdRef.current) {
+				return;
+			}
 
 			const loadedSales: ActiveSale[] = [];
+
+			const normalizedAccount = account.toLowerCase();
 
 			for (let saleId = 1n; saleId <= saleCount; saleId++) {
 				const sale = await realEstateEscrow.getSale(saleId);
 
+				if (requestId !== requestIdRef.current) {
+					return;
+				}
+
 				const exists = sale.exists as boolean;
+
 				const status = Number(sale.status);
+
 				const seller = sale.seller as string;
 
+				/*
+				 * SaleStatus:
+				 *
+				 * 0 = Created
+				 * 1 = Funded
+				 * 2 = Completed
+				 * 3 = Cancelled
+				 *
+				 * Funded je kod našeg ugovora
+				 * samo prijelazni status unutar
+				 * iste transakcije.
+				 *
+				 * Kupcu prikazujemo samo Created.
+				 */
 				const isCreated = status === 0;
 
 				const belongsToAnotherAccount =
-					seller.toLowerCase() !== account.toLowerCase();
+					seller.toLowerCase() !== normalizedAccount;
 
 				if (!exists || !isCreated || !belongsToAnotherAccount) {
 					continue;
@@ -134,12 +226,53 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 
 				const propertyId = sale.propertyId as bigint;
 
-				const property = await propertyRegistry.getProperty(propertyId);
+				/*
+				 * Ovdje se vidi ključna stvar
+				 * za diplomski:
+				 *
+				 * frontend NE računa sam
+				 * uvjete kupoprodaje.
+				 *
+				 * getPurchaseConditions()
+				 * ih vraća iz smart contracta.
+				 */
+				const [property, blockchainConditions] = await Promise.all([
+					propertyRegistry.getProperty(propertyId),
+
+					realEstateEscrow.getPurchaseConditions(saleId, account),
+				]);
+
+				if (requestId !== requestIdRef.current) {
+					return;
+				}
+
+				const conditions: PurchaseConditions = {
+					saleExists: blockchainConditions.saleExists as boolean,
+
+					saleActive: blockchainConditions.saleActive as boolean,
+
+					documentsValid: blockchainConditions.documentsValid as boolean,
+
+					sellerIsOwner: blockchainConditions.sellerIsOwner as boolean,
+
+					buyerIsNotSeller: blockchainConditions.buyerIsNotSeller as boolean,
+
+					buyerHasSufficientBalance:
+						blockchainConditions.buyerHasSufficientBalance as boolean,
+
+					buyerHasSufficientAllowance:
+						blockchainConditions.buyerHasSufficientAllowance as boolean,
+
+					readyForPurchase: blockchainConditions.readyForPurchase as boolean,
+				};
 
 				loadedSales.push({
 					id: sale.id as bigint,
+
 					propertyId,
+
 					seller,
+
 					price: sale.price as bigint,
 
 					propertyAddress: property.propertyAddress as string,
@@ -147,40 +280,94 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 					cadastralMunicipality: property.cadastralMunicipality as string,
 
 					parcelNumber: property.parcelNumber as string,
+
+					conditions,
 				});
 			}
 
-			setSales(loadedSales);
+			/*
+			 * Novije prodaje prikazujemo prve.
+			 */
+			loadedSales.sort((a, b) => {
+				if (a.id === b.id) {
+					return 0;
+				}
+
+				return a.id > b.id ? -1 : 1;
+			});
+
+			if (requestId === requestIdRef.current) {
+				setBuyerBalance(balance);
+
+				setEscrowAllowance(allowance);
+
+				setSales(loadedSales);
+			}
 		} catch (error) {
-			setSales([]);
-			setErrorMessage(getErrorMessage(error));
+			if (requestId === requestIdRef.current) {
+				setSales([]);
+
+				setBuyerBalance(0n);
+
+				setEscrowAllowance(0n);
+
+				setErrorMessage(getErrorMessage(error));
+			}
 		} finally {
-			setIsLoading(false);
+			if (requestId === requestIdRef.current) {
+				setIsLoading(false);
+			}
 		}
 	}, [account]);
 
 	useEffect(() => {
+		/*
+		 * Odmah čistimo podatke prethodnog
+		 * MetaMask računa.
+		 */
+		setSales([]);
+
+		setBuyerBalance(0n);
+
+		setEscrowAllowance(0n);
+
 		setStatusMessage("");
+
 		setSuccessMessage("");
+
 		setErrorMessage("");
+
 		setTransactionHash("");
+
 		setProcessingAction("");
 
 		void loadPurchaseData();
-	}, [account, loadPurchaseData]);
+
+		return () => {
+			/*
+			 * Invalidiramo eventualni stari
+			 * READ zahtjev.
+			 */
+			requestIdRef.current++;
+		};
+	}, [loadPurchaseData]);
 
 	async function getSignerContracts(): Promise<{
 		mockEUR: Contract;
 		realEstateEscrow: Contract;
-		propertyRegistry: Contract;
 	}> {
 		if (!window.ethereum) {
 			throw new Error("MetaMask nije pronađen u pregledniku.");
 		}
 
+		/*
+		 * MetaMask koristimo samo za WRITE
+		 * transakcije koje korisnik mora potpisati.
+		 */
 		const provider = new BrowserProvider(window.ethereum);
 
 		const signer = await provider.getSigner();
+
 		const signerAddress = await signer.getAddress();
 
 		if (signerAddress.toLowerCase() !== account.toLowerCase()) {
@@ -195,12 +382,6 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 				realEstateEscrowAbi,
 				signer,
 			),
-
-			propertyRegistry: new Contract(
-				CONTRACT_ADDRESSES.propertyRegistry,
-				propertyRegistryAbi,
-				signer,
-			),
 		};
 	}
 
@@ -213,10 +394,27 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 		setTransactionHash("");
 
 		try {
+			/*
+			 * Ovo je samo pomoćna frontend
+			 * zaštita.
+			 *
+			 * Stvarni uvjeti ostaju pod
+			 * kontrolom smart contracta.
+			 */
+			if (!sale.conditions.buyerHasSufficientBalance) {
+				throw new Error(
+					"Kupac nema dovoljno MockEUR sredstava za ovu prodaju.",
+				);
+			}
+
 			const { mockEUR } = await getSignerContracts();
 
 			setStatusMessage("Potvrdi odobrenje MockEUR tokena u MetaMasku...");
 
+			/*
+			 * Kupac odobrava samo točan iznos
+			 * potreban za ovu kupoprodaju.
+			 */
 			const transaction = await mockEUR.approve(
 				CONTRACT_ADDRESSES.realEstateEscrow,
 				sale.price,
@@ -243,9 +441,17 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 				)} mEUR za prodaju ID ${sale.id.toString()}.`,
 			);
 
+			/*
+			 * Sada ponovno čitamo stanje
+			 * direktno s Hardhat RPC-a.
+			 *
+			 * getPurchaseConditions()
+			 * mora vratiti allowance = true.
+			 */
 			await loadPurchaseData();
 		} catch (error) {
 			setStatusMessage("");
+
 			setErrorMessage(getErrorMessage(error));
 		} finally {
 			setProcessingAction("");
@@ -261,27 +467,64 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 		setTransactionHash("");
 
 		try {
-			if (buyerBalance < sale.price) {
-				throw new Error("Kupac nema dovoljno MockEUR sredstava.");
-			}
+			/*
+			 * Neposredno prije WRITE transakcije
+			 * ponovno pitamo smart contract jesu li
+			 * svi uvjeti još uvijek zadovoljeni.
+			 *
+			 * Čitanje ide direktno preko Hardhat RPC-a.
+			 */
+			const readProvider = new JsonRpcProvider(LOCAL_RPC_URL);
 
-			if (escrowAllowance < sale.price) {
+			const readEscrow = new Contract(
+				CONTRACT_ADDRESSES.realEstateEscrow,
+				realEstateEscrowAbi,
+				readProvider,
+			);
+
+			const latestConditions = await readEscrow.getPurchaseConditions(
+				sale.id,
+				account,
+			);
+
+			if (!(latestConditions.readyForPurchase as boolean)) {
 				throw new Error(
-					"Prvo je potrebno odobriti escrow ugovoru korištenje sredstava.",
+					"Smart contract potvrđuje da još nisu ispunjeni svi uvjeti za kupoprodaju.",
 				);
 			}
 
-			const { mockEUR, realEstateEscrow, propertyRegistry } =
-				await getSignerContracts();
+			const { realEstateEscrow } = await getSignerContracts();
 
-			setStatusMessage("Potvrdi kupnju nekretnine u MetaMasku...");
+			setStatusMessage(
+				"Svi uvjeti su zadovoljeni. Potvrdi kupnju nekretnine u MetaMasku...",
+			);
 
+			/*
+			 * fundSale je ključna WRITE operacija.
+			 *
+			 * Smart contract ponovno provjerava:
+			 *
+			 * - status prodaje
+			 * - dokumentaciju
+			 * - vlasništvo prodavatelja
+			 * - da kupac nije prodavatelj
+			 * - saldo kupca
+			 * - allowance
+			 *
+			 * Ako je sve zadovoljeno, ugovor
+			 * automatski:
+			 *
+			 * 1. uzima sredstva kupca
+			 * 2. prenosi digitalno vlasništvo
+			 * 3. isplaćuje prodavatelja
+			 * 4. završava prodaju
+			 */
 			const transaction = await realEstateEscrow.fundSale(sale.id);
 
 			setTransactionHash(transaction.hash);
 
 			setStatusMessage(
-				"Pametni ugovor izvršava kupoprodaju. Čeka se potvrda blockchaina...",
+				"Pametni ugovor automatski izvršava kupoprodaju. Čeka se potvrda blockchaina...",
 			);
 
 			const receipt = await transaction.wait();
@@ -290,17 +533,42 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 				throw new Error("Potvrda kupoprodajne transakcije nije pronađena.");
 			}
 
+			/*
+			 * Nakon potvrđene transakcije konačno
+			 * stanje NE čitamo preko MetaMaska,
+			 * nego direktno s Hardhat nodea.
+			 */
+			const postTransactionProvider = new JsonRpcProvider(LOCAL_RPC_URL);
+
+			const propertyRegistryRead = new Contract(
+				CONTRACT_ADDRESSES.propertyRegistry,
+				propertyRegistryAbi,
+				postTransactionProvider,
+			);
+
+			const mockEURRead = new Contract(
+				CONTRACT_ADDRESSES.mockEUR,
+				mockEURAbi,
+				postTransactionProvider,
+			);
+
+			const realEstateEscrowRead = new Contract(
+				CONTRACT_ADDRESSES.realEstateEscrow,
+				realEstateEscrowAbi,
+				postTransactionProvider,
+			);
+
 			const [newDigitalOwner, newBuyerBalance, sellerBalance, completedSale] =
 				await Promise.all([
-					propertyRegistry.getDigitalOwner(sale.propertyId) as Promise<string>,
+					propertyRegistryRead.getDigitalOwner(
+						sale.propertyId,
+					) as Promise<string>,
 
-					mockEUR.balanceOf(account) as Promise<bigint>,
+					mockEURRead.balanceOf(account) as Promise<bigint>,
 
-					mockEUR.balanceOf(sale.seller) as Promise<bigint>,
+					mockEURRead.balanceOf(sale.seller) as Promise<bigint>,
 
-					realEstateEscrow.getSale(sale.id) as Promise<{
-						status: bigint;
-					}>,
+					realEstateEscrowRead.getSale(sale.id),
 				]);
 
 			const completedStatus = Number(completedSale.status);
@@ -324,9 +592,14 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 				)} mEUR. Stanje prodavatelja: ${formatUnits(sellerBalance, 2)} mEUR.`,
 			);
 
+			/*
+			 * Prodaja je sada Completed pa
+			 * nestaje iz popisa aktivnih prodaja.
+			 */
 			await loadPurchaseData();
 		} catch (error) {
 			setStatusMessage("");
+
 			setErrorMessage(getErrorMessage(error));
 		} finally {
 			setProcessingAction("");
@@ -342,8 +615,9 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 					<h2>Kupnja nekretnine</h2>
 
 					<p>
-						Kupac odobrava korištenje simuliranih sredstava i pokreće automatsko
-						izvršenje pametnog ugovora.
+						Pametni ugovor provjerava dokumentaciju, vlasništvo, raspoloživa
+						sredstva i odobrenje sredstava prije automatskog izvršenja
+						kupoprodaje.
 					</p>
 				</div>
 
@@ -372,7 +646,9 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 			</div>
 
 			{isLoading && sales.length === 0 && (
-				<p className="transaction-status">Učitavaju se aktivne prodaje...</p>
+				<p className="transaction-status">
+					Blockchain provjerava aktivne prodaje i uvjete kupoprodaje...
+				</p>
 			)}
 
 			{!isLoading && sales.length === 0 && (
@@ -383,9 +659,7 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 
 			<div className="property-list">
 				{sales.map((sale) => {
-					const hasEnoughBalance = buyerBalance >= sale.price;
-
-					const hasEnoughAllowance = escrowAllowance >= sale.price;
+					const { conditions } = sale;
 
 					const isApproving =
 						processingAction === `approve-${sale.id.toString()}`;
@@ -414,29 +688,167 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 							<dl className="property-details">
 								<div>
 									<dt>Nekretnina ID</dt>
+
 									<dd>{sale.propertyId.toString()}</dd>
 								</div>
 
 								<div>
 									<dt>Katastarska općina</dt>
+
 									<dd>{sale.cadastralMunicipality}</dd>
 								</div>
 
 								<div>
 									<dt>Broj čestice</dt>
+
 									<dd>{sale.parcelNumber}</dd>
 								</div>
 
 								<div>
 									<dt>Prodavatelj</dt>
+
 									<dd title={sale.seller}>{shortenAddress(sale.seller)}</dd>
 								</div>
 							</dl>
 
-							{!hasEnoughBalance && (
+							<div className="transaction-result">
+								<strong>Uvjeti za izvršenje kupoprodaje</strong>
+
+								<dl className="property-details">
+									<div>
+										<dt>Prodaja postoji</dt>
+
+										<dd>
+											<span
+												className={`status-badge status-${getConditionClass(
+													conditions.saleExists,
+												)}`}
+											>
+												{getConditionLabel(conditions.saleExists)}
+											</span>
+										</dd>
+									</div>
+
+									<div>
+										<dt>Prodaja je aktivna</dt>
+
+										<dd>
+											<span
+												className={`status-badge status-${getConditionClass(
+													conditions.saleActive,
+												)}`}
+											>
+												{getConditionLabel(conditions.saleActive)}
+											</span>
+										</dd>
+									</div>
+
+									<div>
+										<dt>Dokumentacija je valjana</dt>
+
+										<dd>
+											<span
+												className={`status-badge status-${getConditionClass(
+													conditions.documentsValid,
+												)}`}
+											>
+												{getConditionLabel(conditions.documentsValid)}
+											</span>
+										</dd>
+									</div>
+
+									<div>
+										<dt>Prodavatelj je vlasnik</dt>
+
+										<dd>
+											<span
+												className={`status-badge status-${getConditionClass(
+													conditions.sellerIsOwner,
+												)}`}
+											>
+												{getConditionLabel(conditions.sellerIsOwner)}
+											</span>
+										</dd>
+									</div>
+
+									<div>
+										<dt>Kupac nije prodavatelj</dt>
+
+										<dd>
+											<span
+												className={`status-badge status-${getConditionClass(
+													conditions.buyerIsNotSeller,
+												)}`}
+											>
+												{getConditionLabel(conditions.buyerIsNotSeller)}
+											</span>
+										</dd>
+									</div>
+
+									<div>
+										<dt>Kupac ima dovoljno sredstava</dt>
+
+										<dd>
+											<span
+												className={`status-badge status-${getConditionClass(
+													conditions.buyerHasSufficientBalance,
+												)}`}
+											>
+												{getConditionLabel(
+													conditions.buyerHasSufficientBalance,
+												)}
+											</span>
+										</dd>
+									</div>
+
+									<div>
+										<dt>Allowance je dovoljan</dt>
+
+										<dd>
+											<span
+												className={`status-badge status-${getConditionClass(
+													conditions.buyerHasSufficientAllowance,
+												)}`}
+											>
+												{getConditionLabel(
+													conditions.buyerHasSufficientAllowance,
+												)}
+											</span>
+										</dd>
+									</div>
+								</dl>
+
+								<p>
+									<strong>
+										Spremno za kupoprodaju:{" "}
+										{conditions.readyForPurchase ? "DA" : "NE"}
+									</strong>
+								</p>
+							</div>
+
+							{!conditions.buyerHasSufficientBalance && (
 								<p className="purchase-warning">
 									Kupac nema dovoljno MockEUR sredstava za ovu prodaju.
 								</p>
+							)}
+
+							{conditions.buyerHasSufficientBalance &&
+								!conditions.buyerHasSufficientAllowance && (
+									<p className="purchase-warning">
+										Kupac ima dovoljno sredstava, ali ih još nije odobrio escrow
+										ugovoru.
+									</p>
+								)}
+
+							{conditions.readyForPurchase && (
+								<div className="transaction-result success-result">
+									<strong>Svi uvjeti su zadovoljeni</strong>
+
+									<p>
+										Smart contract označava ovu kupoprodaju spremnom za
+										automatsko izvršenje.
+									</p>
+								</div>
 							)}
 
 							<div className="purchase-actions">
@@ -444,13 +856,15 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 									type="button"
 									className="approve-button"
 									disabled={
-										isProcessing || hasEnoughAllowance || !hasEnoughBalance
+										isProcessing ||
+										conditions.buyerHasSufficientAllowance ||
+										!conditions.buyerHasSufficientBalance
 									}
 									onClick={() => void approveSale(sale)}
 								>
 									{isApproving
 										? "Odobrenje u tijeku..."
-										: hasEnoughAllowance
+										: conditions.buyerHasSufficientAllowance
 											? "Sredstva su odobrena"
 											: "Odobri sredstva"}
 								</button>
@@ -458,9 +872,7 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 								<button
 									type="button"
 									className="purchase-button"
-									disabled={
-										isProcessing || !hasEnoughBalance || !hasEnoughAllowance
-									}
+									disabled={isProcessing || !conditions.readyForPurchase}
 									onClick={() => void purchaseSale(sale)}
 								>
 									{isPurchasing ? "Kupnja u tijeku..." : "Kupi nekretninu"}
@@ -484,6 +896,7 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 			{transactionHash && (
 				<div className="blockchain-value">
 					<span>Hash posljednje transakcije</span>
+
 					<code>{transactionHash}</code>
 				</div>
 			)}

@@ -1,7 +1,11 @@
-import { BrowserProvider, Contract } from "ethers";
-import { useCallback, useEffect, useState } from "react";
+import { Contract, JsonRpcProvider } from "ethers";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
+import {
+	CONTRACT_ADDRESSES,
+	HARDHAT_CHAIN_ID,
+} from "../../blockchain/contracts";
+
 import { propertyRegistryAbi } from "../../blockchain/propertyRegistryAbi";
 import { realEstateEscrowAbi } from "../../blockchain/realEstateEscrowAbi";
 
@@ -17,10 +21,43 @@ interface Statistic {
 	value: number;
 }
 
+interface PropertySnapshot {
+	exists: boolean;
+	digitalOwner: string;
+	verificationStatus: number;
+}
+
+interface SaleSnapshot {
+	exists: boolean;
+	seller: string;
+	buyer: string;
+	status: number;
+}
+
+const LOCAL_RPC_URL = "http://127.0.0.1:8545";
+
 function getErrorMessage(error: unknown): string {
-	return error instanceof Error
-		? error.message
-		: "Dogodila se neočekivana pogreška.";
+	if (typeof error === "object" && error !== null) {
+		const contractError = error as {
+			reason?: unknown;
+			shortMessage?: unknown;
+			message?: unknown;
+		};
+
+		if (typeof contractError.reason === "string") {
+			return contractError.reason;
+		}
+
+		if (typeof contractError.shortMessage === "string") {
+			return contractError.shortMessage;
+		}
+
+		if (typeof contractError.message === "string") {
+			return contractError.message;
+		}
+	}
+
+	return "Dohvat blockchain statistike nije uspio.";
 }
 
 export default function DashboardStats({
@@ -28,19 +65,53 @@ export default function DashboardStats({
 	applicationProfile,
 }: DashboardStatsProps) {
 	const [statistics, setStatistics] = useState<Statistic[]>([]);
+
 	const [isLoading, setIsLoading] = useState(false);
+
 	const [error, setError] = useState("");
 
+	/*
+	 * ID trenutačnog zahtjeva.
+	 *
+	 * Ako korisnik promijeni račun dok traje staro
+	 * učitavanje, rezultat starog zahtjeva se ignorira.
+	 */
+	const requestIdRef = useRef(0);
+
 	const loadStatistics = useCallback(async (): Promise<void> => {
-		if (!window.ethereum || !account) {
+		if (!account) {
+			setStatistics([]);
+			setError("");
+
 			return;
 		}
+
+		const requestId = ++requestIdRef.current;
 
 		setIsLoading(true);
 		setError("");
 
 		try {
-			const provider = new BrowserProvider(window.ethereum);
+			/*
+			 * READ operacije idu izravno na lokalni
+			 * Hardhat JSON-RPC node.
+			 *
+			 * MetaMask nam za ovo nije potreban jer
+			 * ne potpisujemo nikakvu transakciju.
+			 */
+			const provider = new JsonRpcProvider(LOCAL_RPC_URL);
+
+			const network = await provider.getNetwork();
+
+			if (network.chainId !== HARDHAT_CHAIN_ID) {
+				throw new Error(
+					`Neočekivana blockchain mreža. Chain ID: ${network.chainId.toString()}.`,
+				);
+			}
+
+			if (requestId !== requestIdRef.current) {
+				return;
+			}
 
 			const propertyRegistry = new Contract(
 				CONTRACT_ADDRESSES.propertyRegistry,
@@ -56,39 +127,72 @@ export default function DashboardStats({
 
 			const normalizedAccount = account.toLowerCase();
 
-			/*
-			 * NEKRETNINE
-			 *
-			 * VerificationStatus:
-			 * 0 = Pending
-			 * 1 = Verified
-			 * 2 = Rejected
-			 */
-			const propertyCount: bigint = await propertyRegistry.getPropertyCount();
+			/* ======================================
+				   BROJ ZAPISA
+				   ====================================== */
+
+			const [propertyCount, saleCount] = await Promise.all([
+				propertyRegistry.getPropertyCount() as Promise<bigint>,
+
+				realEstateEscrow.getSaleCount() as Promise<bigint>,
+			]);
+
+			if (requestId !== requestIdRef.current) {
+				return;
+			}
+
+			/* ======================================
+				   NEKRETNINE
+				   ====================================== */
+
+			const propertyRequests: Promise<PropertySnapshot>[] = [];
+
+			for (let propertyId = 1n; propertyId <= propertyCount; propertyId++) {
+				propertyRequests.push(
+					(async () => {
+						const property = await propertyRegistry.getProperty(propertyId);
+
+						return {
+							exists: property.exists as boolean,
+
+							digitalOwner: property.digitalOwner as string,
+
+							verificationStatus: Number(property.verificationStatus),
+						};
+					})(),
+				);
+			}
+
+			const properties = await Promise.all(propertyRequests);
+
+			if (requestId !== requestIdRef.current) {
+				return;
+			}
+
+			let existingProperties = 0;
 
 			let pendingProperties = 0;
 			let verifiedProperties = 0;
 			let rejectedProperties = 0;
+
 			let ownedProperties = 0;
 
-			for (let propertyId = 1n; propertyId <= propertyCount; propertyId++) {
-				const property = await propertyRegistry.getProperty(propertyId);
-
+			for (const property of properties) {
 				if (!property.exists) {
 					continue;
 				}
 
-				const verificationStatus = Number(property.verificationStatus);
+				existingProperties++;
 
-				if (verificationStatus === 0) {
+				if (property.verificationStatus === 0) {
 					pendingProperties++;
 				}
 
-				if (verificationStatus === 1) {
+				if (property.verificationStatus === 1) {
 					verifiedProperties++;
 				}
 
-				if (verificationStatus === 2) {
+				if (property.verificationStatus === 2) {
 					rejectedProperties++;
 				}
 
@@ -97,16 +201,35 @@ export default function DashboardStats({
 				}
 			}
 
-			/*
-			 * PRODAJE
-			 *
-			 * SaleStatus:
-			 * 0 = Created
-			 * 1 = Funded
-			 * 2 = Completed
-			 * 3 = Cancelled
-			 */
-			const saleCount: bigint = await realEstateEscrow.getSaleCount();
+			/* ======================================
+				   PRODAJE
+				   ====================================== */
+
+			const saleRequests: Promise<SaleSnapshot>[] = [];
+
+			for (let saleId = 1n; saleId <= saleCount; saleId++) {
+				saleRequests.push(
+					(async () => {
+						const sale = await realEstateEscrow.getSale(saleId);
+
+						return {
+							exists: sale.exists as boolean,
+
+							seller: sale.seller as string,
+
+							buyer: sale.buyer as string,
+
+							status: Number(sale.status),
+						};
+					})(),
+				);
+			}
+
+			const sales = await Promise.all(saleRequests);
+
+			if (requestId !== requestIdRef.current) {
+				return;
+			}
 
 			let activeSales = 0;
 			let completedSales = 0;
@@ -118,20 +241,29 @@ export default function DashboardStats({
 			let buyerAvailableSales = 0;
 			let buyerCompletedPurchases = 0;
 
-			for (let saleId = 1n; saleId <= saleCount; saleId++) {
-				const sale = await realEstateEscrow.getSale(saleId);
-
+			for (const sale of sales) {
 				if (!sale.exists) {
 					continue;
 				}
 
-				const saleStatus = Number(sale.status);
+				const normalizedSeller = sale.seller.toLowerCase();
 
-				const isCurrentSeller = sale.seller.toLowerCase() === normalizedAccount;
+				const normalizedBuyer = sale.buyer.toLowerCase();
 
-				const isCurrentBuyer = sale.buyer.toLowerCase() === normalizedAccount;
+				const isCurrentSeller = normalizedSeller === normalizedAccount;
 
-				if (saleStatus === 0) {
+				const isCurrentBuyer = normalizedBuyer === normalizedAccount;
+
+				/*
+				 * SaleStatus:
+				 *
+				 * 0 = Created
+				 * 1 = Funded
+				 * 2 = Completed
+				 * 3 = Cancelled
+				 */
+
+				if (sale.status === 0 || sale.status === 1) {
 					activeSales++;
 
 					if (isCurrentSeller) {
@@ -143,7 +275,7 @@ export default function DashboardStats({
 					}
 				}
 
-				if (saleStatus === 2) {
+				if (sale.status === 2) {
 					completedSales++;
 
 					if (isCurrentSeller) {
@@ -155,10 +287,14 @@ export default function DashboardStats({
 					}
 				}
 
-				if (saleStatus === 3) {
+				if (sale.status === 3) {
 					cancelledSales++;
 				}
 			}
+
+			/* ======================================
+				   STATISTIKA PREMA PROFILU
+				   ====================================== */
 
 			let profileStatistics: Statistic[] = [];
 
@@ -167,7 +303,7 @@ export default function DashboardStats({
 					profileStatistics = [
 						{
 							label: "Ukupno nekretnina",
-							value: Number(propertyCount),
+							value: existingProperties,
 						},
 						{
 							label: "Aktivne prodaje",
@@ -182,6 +318,7 @@ export default function DashboardStats({
 							value: cancelledSales,
 						},
 					];
+
 					break;
 
 				case "Verifikator":
@@ -199,6 +336,7 @@ export default function DashboardStats({
 							value: rejectedProperties,
 						},
 					];
+
 					break;
 
 				case "Prodavatelj":
@@ -216,6 +354,7 @@ export default function DashboardStats({
 							value: sellerCompletedSales,
 						},
 					];
+
 					break;
 
 				case "Kupac":
@@ -233,23 +372,40 @@ export default function DashboardStats({
 							value: buyerCompletedPurchases,
 						},
 					];
+
 					break;
 
 				default:
 					profileStatistics = [];
 			}
 
-			setStatistics(profileStatistics);
+			if (requestId === requestIdRef.current) {
+				setStatistics(profileStatistics);
+			}
 		} catch (caughtError) {
-			console.error(caughtError);
-			setError(getErrorMessage(caughtError));
+			if (requestId === requestIdRef.current) {
+				console.error(caughtError);
+
+				setStatistics([]);
+
+				setError(getErrorMessage(caughtError));
+			}
 		} finally {
-			setIsLoading(false);
+			if (requestId === requestIdRef.current) {
+				setIsLoading(false);
+			}
 		}
 	}, [account, applicationProfile]);
 
 	useEffect(() => {
+		setStatistics([]);
+		setError("");
+
 		void loadStatistics();
+
+		return () => {
+			requestIdRef.current++;
+		};
 	}, [loadStatistics]);
 
 	return (

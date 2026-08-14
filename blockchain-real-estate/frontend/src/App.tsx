@@ -1,16 +1,26 @@
-import { BrowserProvider, Contract, type Eip1193Provider } from "ethers";
-import { useCallback, useEffect, useState } from "react";
+import {
+	BrowserProvider,
+	Contract,
+	JsonRpcProvider,
+	type Eip1193Provider,
+} from "ethers";
+
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import "./App.css";
 import "./styles/shared.css";
 
 import { CONTRACT_ADDRESSES, HARDHAT_CHAIN_ID } from "./blockchain/contracts";
+
 import { propertyRegistryAbi } from "./blockchain/propertyRegistryAbi";
+
 import ActiveSalesPanel from "./components/ActiveSalesPanel/ActiveSalesPanel";
 import CreateSaleForm from "./components/CreateSaleForm/CreateSaleForm";
+
 import DashboardNavigation, {
 	type DashboardSection,
 } from "./components/DashboardNavigation/DashboardNavigation";
+
 import DashboardOverview from "./components/DashboardOverview/DashboardOverview";
 import MintMockEURForm from "./components/MintMockEURForm/MintMockEURForm";
 import PropertyPanel from "./components/PropertyPanel/PropertyPanel";
@@ -44,6 +54,14 @@ declare global {
 	}
 }
 
+const LOCAL_RPC_URL = "http://127.0.0.1:8545";
+
+const DEMO_ACCOUNTS = {
+	seller: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+
+	buyer: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+} as const;
+
 function shortenAddress(address: string): string {
 	return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
@@ -54,59 +72,122 @@ function getErrorMessage(error: unknown): string {
 		: "Dogodila se neočekivana pogreška.";
 }
 
-const DEMO_ACCOUNTS = {
-	seller: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-	buyer: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
-} as const;
-
 export default function App() {
 	const [account, setAccount] = useState("");
+
 	const [networkName, setNetworkName] = useState("");
+
 	const [roles, setRoles] = useState<string[]>([]);
+
 	const [error, setError] = useState("");
+
 	const [isConnecting, setIsConnecting] = useState(false);
+
 	const [activeSection, setActiveSection] =
 		useState<DashboardSection>("overview");
 
+	/*
+	 * Svako učitavanje podataka računa dobiva
+	 * svoj jedinstveni ID.
+	 *
+	 * Ako se MetaMask račun promijeni dok prethodni
+	 * zahtjev još traje, rezultat starog zahtjeva
+	 * više ne smije prepisati stanje novog računa.
+	 */
+	const accountRequestIdRef = useRef(0);
+
 	const clearWalletData = useCallback((): void => {
+		accountRequestIdRef.current++;
+
 		setAccount("");
 		setNetworkName("");
 		setRoles([]);
+		setError("");
 	}, []);
 
+	/*
+	 * Učitavanje blockchain podataka povezanog računa.
+	 *
+	 * BrowserProvider koristimo samo kako bismo
+	 * provjerili na kojoj je mreži MetaMask.
+	 *
+	 * Blockchain uloge čitamo izravno s
+	 * lokalnog Hardhat JSON-RPC nodea.
+	 */
 	const loadAccountData = useCallback(
 		async (
 			selectedAccount: string,
-			provider: BrowserProvider,
+			browserProvider: BrowserProvider,
 		): Promise<void> => {
-			const network = await provider.getNetwork();
+			const requestId = ++accountRequestIdRef.current;
 
-			if (network.chainId !== HARDHAT_CHAIN_ID) {
-				clearWalletData();
+			/* =========================================
+			   1. PROVJERA METAMASK MREŽE
+			   ========================================= */
 
-				setNetworkName(`Chain ID: ${network.chainId.toString()}`);
+			const walletNetwork = await browserProvider.getNetwork();
+
+			if (requestId !== accountRequestIdRef.current) {
+				return;
+			}
+
+			if (walletNetwork.chainId !== HARDHAT_CHAIN_ID) {
+				setAccount("");
+				setRoles([]);
+
+				setNetworkName(`Chain ID: ${walletNetwork.chainId.toString()}`);
 
 				throw new Error("Prebaci MetaMask na mrežu Hardhat local.");
+			}
+
+			/* =========================================
+			   2. DIREKTNO ČITANJE HARDHAT STANJA
+			   ========================================= */
+
+			const readProvider = new JsonRpcProvider(LOCAL_RPC_URL);
+
+			const blockchainNetwork = await readProvider.getNetwork();
+
+			if (requestId !== accountRequestIdRef.current) {
+				return;
+			}
+
+			if (blockchainNetwork.chainId !== HARDHAT_CHAIN_ID) {
+				throw new Error(
+					`Lokalni blockchain koristi neočekivani Chain ID: ${blockchainNetwork.chainId.toString()}.`,
+				);
 			}
 
 			const propertyRegistry = new Contract(
 				CONTRACT_ADDRESSES.propertyRegistry,
 				propertyRegistryAbi,
-				provider,
+				readProvider,
 			);
 
 			const [adminRole, verifierRole, transferRole] = await Promise.all([
 				propertyRegistry.DEFAULT_ADMIN_ROLE(),
+
 				propertyRegistry.VERIFIER_ROLE(),
+
 				propertyRegistry.TRANSFER_ROLE(),
 			]);
+
+			if (requestId !== accountRequestIdRef.current) {
+				return;
+			}
 
 			const [hasAdminRole, hasVerifierRole, hasTransferRole] =
 				await Promise.all([
 					propertyRegistry.hasRole(adminRole, selectedAccount),
+
 					propertyRegistry.hasRole(verifierRole, selectedAccount),
+
 					propertyRegistry.hasRole(transferRole, selectedAccount),
 				]);
+
+			if (requestId !== accountRequestIdRef.current) {
+				return;
+			}
 
 			const detectedRoles: string[] = [];
 
@@ -127,14 +208,51 @@ export default function App() {
 			}
 
 			setAccount(selectedAccount);
+
 			setNetworkName("Hardhat local");
+
 			setRoles(detectedRoles);
 		},
-		[clearWalletData],
+		[],
 	);
+
+	/*
+	 * Poziva se odmah kada MetaMask prijavi
+	 * promjenu računa.
+	 */
+	const prepareAccountChange = useCallback((selectedAccount: string): void => {
+		/*
+		 * Invalidiramo sve stare async zahtjeve.
+		 */
+		accountRequestIdRef.current++;
+
+		/*
+		 * Novi račun spremamo odmah kako child
+		 * komponente ne bi dobivale adresu
+		 * prethodnog korisnika.
+		 */
+		setAccount(selectedAccount);
+
+		setNetworkName("Hardhat local");
+
+		/*
+		 * Uloge će biti ponovno očitane
+		 * s blockchaina.
+		 */
+		setRoles([]);
+
+		setError("");
+
+		/*
+		 * Kod promjene računa uvijek se
+		 * vraćamo na početni pregled.
+		 */
+		setActiveSection("overview");
+	}, []);
 
 	async function connectWallet(): Promise<void> {
 		setError("");
+
 		setIsConnecting(true);
 
 		try {
@@ -142,14 +260,22 @@ export default function App() {
 				throw new Error("MetaMask nije pronađen u pregledniku.");
 			}
 
-			const provider = new BrowserProvider(window.ethereum);
+			const browserProvider = new BrowserProvider(window.ethereum);
 
-			await provider.send("eth_requestAccounts", []);
+			const accounts = (await browserProvider.send(
+				"eth_requestAccounts",
+				[],
+			)) as string[];
 
-			const signer = await provider.getSigner();
-			const selectedAccount = await signer.getAddress();
+			const selectedAccount = accounts[0];
 
-			await loadAccountData(selectedAccount, provider);
+			if (!selectedAccount) {
+				throw new Error("Nije odabran MetaMask račun.");
+			}
+
+			prepareAccountChange(selectedAccount);
+
+			await loadAccountData(selectedAccount, browserProvider);
 		} catch (caughtError) {
 			setError(getErrorMessage(caughtError));
 		} finally {
@@ -167,29 +293,43 @@ export default function App() {
 		const ethereumProvider: MetaMaskProvider = detectedProvider;
 
 		async function handleAccountsChanged(accounts: string[]): Promise<void> {
-			setError("");
-			setActiveSection("overview");
-
 			const selectedAccount = accounts[0];
 
 			if (!selectedAccount) {
 				clearWalletData();
+
+				setActiveSection("overview");
+
 				return;
 			}
 
-			try {
-				const provider = new BrowserProvider(ethereumProvider);
+			prepareAccountChange(selectedAccount);
 
-				await loadAccountData(selectedAccount, provider);
+			try {
+				const browserProvider = new BrowserProvider(ethereumProvider);
+
+				await loadAccountData(selectedAccount, browserProvider);
 			} catch (caughtError) {
 				setError(getErrorMessage(caughtError));
 			}
 		}
 
 		async function handleChainChanged(): Promise<void> {
+			/*
+			 * Promjena mreže invalidira sve
+			 * prethodne blockchain zahtjeve.
+			 */
+			accountRequestIdRef.current++;
+
 			setError("");
+
+			setAccount("");
+
+			setRoles([]);
+
+			setNetworkName("");
+
 			setActiveSection("overview");
-			clearWalletData();
 
 			try {
 				const accounts = (await ethereumProvider.request({
@@ -202,9 +342,11 @@ export default function App() {
 					return;
 				}
 
-				const provider = new BrowserProvider(ethereumProvider);
+				prepareAccountChange(selectedAccount);
 
-				await loadAccountData(selectedAccount, provider);
+				const browserProvider = new BrowserProvider(ethereumProvider);
+
+				await loadAccountData(selectedAccount, browserProvider);
 			} catch (caughtError) {
 				setError(getErrorMessage(caughtError));
 			}
@@ -222,9 +364,11 @@ export default function App() {
 					return;
 				}
 
-				const provider = new BrowserProvider(ethereumProvider);
+				prepareAccountChange(selectedAccount);
 
-				await loadAccountData(selectedAccount, provider);
+				const browserProvider = new BrowserProvider(ethereumProvider);
+
+				await loadAccountData(selectedAccount, browserProvider);
 			} catch (caughtError) {
 				setError(getErrorMessage(caughtError));
 			}
@@ -237,11 +381,18 @@ export default function App() {
 		void loadPreviouslyConnectedWallet();
 
 		return () => {
+			/*
+			 * Invalidiramo eventualni zahtjev koji
+			 * još traje tijekom unmounta ili
+			 * React StrictMode remounta.
+			 */
+			accountRequestIdRef.current++;
+
 			ethereumProvider.removeListener("accountsChanged", handleAccountsChanged);
 
 			ethereumProvider.removeListener("chainChanged", handleChainChanged);
 		};
-	}, [clearWalletData, loadAccountData]);
+	}, [clearWalletData, loadAccountData, prepareAccountChange]);
 
 	const normalizedAccount = account.toLowerCase();
 
@@ -253,6 +404,16 @@ export default function App() {
 
 	const isBuyer = normalizedAccount === DEMO_ACCOUNTS.buyer.toLowerCase();
 
+	/*
+	 * Prioritet blockchain uloga:
+	 *
+	 * Administrator
+	 * Verifikator
+	 *
+	 * Prodavatelj i Kupac su demo aplikacijski
+	 * profili određeni adresama lokalnih
+	 * Hardhat računa.
+	 */
 	const applicationProfile = isAdmin
 		? "Administrator"
 		: isVerifier
@@ -326,6 +487,7 @@ export default function App() {
 					<div className="app-content">
 						{activeSection === "overview" && (
 							<DashboardOverview
+								key={`overview-${account}-${applicationProfile}`}
 								account={account}
 								applicationProfile={applicationProfile}
 								onSectionChange={setActiveSection}
@@ -333,40 +495,76 @@ export default function App() {
 						)}
 
 						{activeSection === "all-properties" && isAdmin && (
-							<PropertyPanel account={account} showAll />
+							<PropertyPanel
+								key={`all-properties-${account}`}
+								account={account}
+								showAll
+							/>
 						)}
 
 						{activeSection === "my-properties" && (isSeller || isBuyer) && (
-							<PropertyPanel account={account} showAll={false} />
+							<PropertyPanel
+								key={`my-properties-${account}`}
+								account={account}
+								showAll={false}
+							/>
 						)}
 
 						{activeSection === "register-property" && isSeller && (
-							<RegisterPropertyForm account={account} />
+							<RegisterPropertyForm
+								key={`register-property-${account}`}
+								account={account}
+							/>
 						)}
 
 						{activeSection === "verification" && isVerifier && (
-							<VerifyPropertiesPanel account={account} />
+							<VerifyPropertiesPanel
+								key={`verification-${account}`}
+								account={account}
+							/>
 						)}
 
 						{activeSection === "create-sale" && isSeller && (
-							<CreateSaleForm account={account} />
+							<CreateSaleForm
+								key={`create-sale-${account}`}
+								account={account}
+							/>
 						)}
 
-						{activeSection === "active-sales" && isSeller && (
-							<ActiveSalesPanel account={account} showAll={false} />
+						{/* 
+							Prodavatelj vidi samo svoje aktivne prodaje.
+
+							Administrator vidi sve aktivne prodaje,
+							ali ih ne može otkazivati jer ActiveSalesPanel
+							dopušta cancelSale samo stvarnom prodavatelju.
+						*/}
+						{activeSection === "active-sales" && (isSeller || isAdmin) && (
+							<ActiveSalesPanel
+								key={`active-sales-${account}`}
+								account={account}
+								showAll={isAdmin}
+							/>
 						)}
 
 						{activeSection === "purchase" && isBuyer && (
-							<PurchaseSalePanel account={account} />
+							<PurchaseSalePanel
+								key={`purchase-${account}`}
+								account={account}
+							/>
 						)}
 
 						{activeSection === "mockeur" && isAdmin && (
-							<MintMockEURForm account={account} />
+							<MintMockEURForm key={`mockeur-${account}`} account={account} />
 						)}
 
-						{activeSection === "history" && (
-							<TransactionHistoryPanel account={account} showAll={isAdmin} />
-						)}
+						{activeSection === "history" &&
+							(isAdmin || isSeller || isBuyer) && (
+								<TransactionHistoryPanel
+									key={`history-${account}`}
+									account={account}
+									showAll={isAdmin}
+								/>
+							)}
 					</div>
 				</>
 			)}

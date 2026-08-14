@@ -24,6 +24,11 @@ const actionsByProfile: Record<string, QuickAction[]> = {
 			description: "Pregled svih nekretnina registriranih u sustavu.",
 		},
 		{
+			label: "Aktivne prodaje",
+			section: "active-sales",
+			description: "Pregled svih aktivnih prodaja u sustavu.",
+		},
+		{
 			label: "Dodjela MockEUR",
 			section: "mockeur",
 			description: "Dodijeli simulirana sredstva korisnicima sustava.",
@@ -39,7 +44,8 @@ const actionsByProfile: Record<string, QuickAction[]> = {
 		{
 			label: "Verifikacija",
 			section: "verification",
-			description: "Pregledaj dokumentaciju i potvrdi ili odbij nekretninu.",
+			description:
+				"Pregledaj dokumentaciju i potvrdi ili odbij svaki obvezni dokument zasebno.",
 		},
 	],
 
@@ -92,6 +98,9 @@ export default function DashboardOverview({
 }: DashboardOverviewProps) {
 	const actions = actionsByProfile[applicationProfile] ?? [];
 
+	const showAccountBalance =
+		applicationProfile === "Prodavatelj" || applicationProfile === "Kupac";
+
 	return (
 		<div className="dashboard-overview">
 			<section className="dashboard-overview-card">
@@ -113,6 +122,7 @@ export default function DashboardOverview({
 								onClick={() => onSectionChange(action.section)}
 							>
 								<strong>{action.label}</strong>
+
 								<span>{action.description}</span>
 							</button>
 						))}
@@ -125,10 +135,12 @@ export default function DashboardOverview({
 				applicationProfile={applicationProfile}
 			/>
 
-			<AccountBalancePanel
-				account={account}
-				applicationProfile={applicationProfile}
-			/>
+			{showAccountBalance && (
+				<AccountBalancePanel
+					account={account}
+					applicationProfile={applicationProfile}
+				/>
+			)}
 		</div>
 	);
 }

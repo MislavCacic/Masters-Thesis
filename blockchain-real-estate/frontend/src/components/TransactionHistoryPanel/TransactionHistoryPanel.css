@@ -59,16 +59,19 @@
 
 	padding: 10px 16px;
 
-	border: 1px solid #7c3aed;
+	border: 1px solid #68415c;
 	border-radius: 10px;
 
-	background: #6d28d9;
+	background: linear-gradient(135deg, #49283f 0%, #402a52 100%);
+
 	color: #ffffff;
 
 	font-size: 12px;
 	font-weight: 700;
 
-	box-shadow: none;
+	box-shadow:
+		0 5px 14px rgb(0 0 0 / 12%),
+		inset 0 1px 0 rgb(255 255 255 / 3%);
 
 	transition:
 		background 0.22s ease,
@@ -79,25 +82,35 @@
 }
 
 .history-header .secondary-button:hover:not(:disabled) {
-	border-color: #a855f7;
+	border-color: #8a4f78;
 
-	background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 55%, #a855f7 100%);
+	background: linear-gradient(135deg, #6f314f 0%, #654076 55%, #7440a1 100%);
 
 	transform: translateY(-2px);
 
 	box-shadow:
-		0 10px 24px rgb(124 58 237 / 25%),
-		0 0 0 1px rgb(168 85 247 / 14%);
+		0 10px 24px rgb(0 0 0 / 18%),
+		0 7px 20px rgb(124 58 237 / 15%),
+		0 0 0 1px rgb(168 85 247 / 8%);
 }
 
 .history-header .secondary-button:active:not(:disabled) {
 	transform: translateY(0) scale(0.98);
+
+	box-shadow:
+		0 4px 10px rgb(0 0 0 / 14%),
+		inset 0 1px 3px rgb(0 0 0 / 14%);
+}
+
+.history-header .secondary-button:focus-visible {
+	outline: 2px solid #a78bfa;
+	outline-offset: 3px;
 }
 
 .history-header .secondary-button:disabled {
 	cursor: not-allowed;
 
-	opacity: 0.55;
+	opacity: 0.5;
 
 	transform: none;
 	box-shadow: none;
@@ -157,7 +170,10 @@
 		box-shadow 0.22s ease;
 }
 
-/* Uspješno preneseno vlasništvo */
+/* =========================
+   USPJEŠNO PRENESENO
+   ========================= */
+
 .ownership-confirmation {
 	border: 1px solid rgb(34 197 94 / 45%);
 
@@ -175,7 +191,10 @@
 	box-shadow: 0 8px 20px rgb(20 83 45 / 16%);
 }
 
-/* Neočekivano stanje */
+/* =========================
+   NEOČEKIVANO STANJE
+   ========================= */
+
 .ownership-warning {
 	border: 1px solid rgb(239 68 68 / 45%);
 
@@ -193,7 +212,10 @@
 	box-shadow: 0 8px 20px rgb(127 29 29 / 16%);
 }
 
-/* Otkazana prodaja */
+/* =========================
+   OTKAZANA PRODAJA
+   ========================= */
+
 .ownership-cancellation {
 	border: 1px solid rgb(245 158 11 / 45%);
 

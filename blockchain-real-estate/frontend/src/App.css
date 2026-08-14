@@ -285,17 +285,20 @@ body {
 	margin: 0;
 	padding: 7px 9px;
 
-	border: 1px solid #6b58a7;
+	border: 1px solid #68415c;
 	border-radius: 7px;
 
-	background: #554394;
+	background: linear-gradient(135deg, #49283f 0%, #402a52 100%);
+
 	color: #ffffff;
 
 	font-size: 9px;
 	font-weight: 700;
 	line-height: 1;
 
-	box-shadow: none;
+	box-shadow:
+		0 4px 10px rgb(0 0 0 / 12%),
+		inset 0 1px 0 rgb(255 255 255 / 3%);
 
 	transition:
 		background 0.2s ease,
@@ -305,13 +308,15 @@ body {
 }
 
 .wallet-compact-refresh:hover:not(:disabled) {
-	border-color: #8e78d2;
+	border-color: #8a4f78;
 
-	background: linear-gradient(135deg, #6552ad 0%, #755cc7 100%);
+	background: linear-gradient(135deg, #6f314f 0%, #654076 55%, #7440a1 100%);
 
 	transform: translateY(-1px);
 
-	box-shadow: 0 6px 14px rgb(90 65 160 / 24%);
+	box-shadow:
+		0 7px 16px rgb(0 0 0 / 18%),
+		0 5px 14px rgb(124 58 237 / 13%);
 }
 
 .wallet-compact-refresh:active:not(:disabled) {
@@ -383,7 +388,9 @@ body {
 	}
 
 	.app-toolbar {
-		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-columns:
+			minmax(0, 1fr)
+			auto;
 
 		gap: 12px 18px;
 	}
@@ -488,6 +495,7 @@ body {
 
 	.app-content {
 		width: 100%;
+
 		gap: 16px;
 	}
 }

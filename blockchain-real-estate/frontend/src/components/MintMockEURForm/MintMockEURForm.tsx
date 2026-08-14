@@ -1,15 +1,20 @@
-import { useEffect, useState, type FormEvent } from "react";
-
 import {
 	BrowserProvider,
 	Contract,
 	formatUnits,
 	getAddress,
 	isAddress,
+	JsonRpcProvider,
 	parseUnits,
 } from "ethers";
 
-import { CONTRACT_ADDRESSES } from "../../blockchain/contracts";
+import { useEffect, useState, type FormEvent } from "react";
+
+import {
+	CONTRACT_ADDRESSES,
+	HARDHAT_CHAIN_ID,
+} from "../../blockchain/contracts";
+
 import { mockEURAbi } from "../../blockchain/mockEURAbi";
 
 import "./MintMockEURForm.css";
@@ -18,13 +23,20 @@ interface MintMockEURFormProps {
 	account: string;
 }
 
+const LOCAL_RPC_URL = "http://127.0.0.1:8545";
+
 function getErrorMessage(error: unknown): string {
 	if (typeof error === "object" && error !== null) {
 		const contractError = error as {
+			code?: unknown;
 			reason?: unknown;
 			shortMessage?: unknown;
 			message?: unknown;
 		};
+
+		if (contractError.code === 4001) {
+			return "Transakcija je odbijena u MetaMasku.";
+		}
 
 		if (typeof contractError.reason === "string") {
 			return contractError.reason;
@@ -44,18 +56,25 @@ function getErrorMessage(error: unknown): string {
 
 export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 	const [recipientAddress, setRecipientAddress] = useState("");
+
 	const [amount, setAmount] = useState("");
 
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	const [statusMessage, setStatusMessage] = useState("");
+
 	const [successMessage, setSuccessMessage] = useState("");
+
 	const [errorMessage, setErrorMessage] = useState("");
+
 	const [transactionHash, setTransactionHash] = useState("");
 
 	useEffect(() => {
 		setRecipientAddress("");
 		setAmount("");
+
+		setIsSubmitting(false);
+
 		setStatusMessage("");
 		setSuccessMessage("");
 		setErrorMessage("");
@@ -74,6 +93,7 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 
 		if (!window.ethereum) {
 			setErrorMessage("MetaMask nije pronađen u pregledniku.");
+
 			return;
 		}
 
@@ -81,6 +101,7 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 
 		if (!isAddress(trimmedRecipient)) {
 			setErrorMessage("Unesena adresa kupca nije valjana Ethereum adresa.");
+
 			return;
 		}
 
@@ -88,6 +109,7 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 
 		if (!normalizedAmount) {
 			setErrorMessage("Unesi količinu simuliranih sredstava.");
+
 			return;
 		}
 
@@ -100,26 +122,55 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 				throw new Error("Količina mora biti veća od nule.");
 			}
 
-			const provider = new BrowserProvider(window.ethereum);
+			const normalizedRecipient = getAddress(trimmedRecipient);
 
-			const signer = await provider.getSigner();
+			/* =============================================
+			   1. ČITANJE POČETNOG STANJA
+			   ============================================= */
+
+			const readProvider = new JsonRpcProvider(LOCAL_RPC_URL);
+
+			const network = await readProvider.getNetwork();
+
+			if (network.chainId !== HARDHAT_CHAIN_ID) {
+				throw new Error(
+					`Neočekivana blockchain mreža. Chain ID: ${network.chainId.toString()}.`,
+				);
+			}
+
+			const mockEURRead = new Contract(
+				CONTRACT_ADDRESSES.mockEUR,
+				mockEURAbi,
+				readProvider,
+			);
+
+			const balanceBefore = (await mockEURRead.balanceOf(
+				normalizedRecipient,
+			)) as bigint;
+
+			/* =============================================
+			   2. METAMASK WRITE TRANSAKCIJA
+			   ============================================= */
+
+			const browserProvider = new BrowserProvider(window.ethereum);
+
+			const signer = await browserProvider.getSigner();
+
 			const signerAddress = await signer.getAddress();
 
 			if (signerAddress.toLowerCase() !== account.toLowerCase()) {
 				throw new Error("MetaMask račun se promijenio. Pokušaj ponovno.");
 			}
 
-			const mockEUR = new Contract(
+			const mockEURWrite = new Contract(
 				CONTRACT_ADDRESSES.mockEUR,
 				mockEURAbi,
 				signer,
 			);
 
-			const normalizedRecipient = getAddress(trimmedRecipient);
-
 			setStatusMessage("Potvrdi dodjelu MockEUR tokena u MetaMasku...");
 
-			const transaction = await mockEUR.mint(
+			const transaction = await mockEURWrite.mint(
 				normalizedRecipient,
 				amountInSmallestUnits,
 			);
@@ -136,22 +187,60 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 				throw new Error("Potvrda blockchain transakcije nije pronađena.");
 			}
 
-			const buyerBalance = (await mockEUR.balanceOf(
-				normalizedRecipient,
-			)) as bigint;
+			if (receipt.status !== 1) {
+				throw new Error(
+					"Blockchain transakcija dodjele MockEUR tokena nije uspješno izvršena.",
+				);
+			}
+
+			/* =============================================
+			   3. PROVJERA KONAČNOG STANJA
+			   ============================================= */
+
+			const postTransactionProvider = new JsonRpcProvider(LOCAL_RPC_URL);
+
+			const mockEURPost = new Contract(
+				CONTRACT_ADDRESSES.mockEUR,
+				mockEURAbi,
+				postTransactionProvider,
+			);
+
+			const [balanceAfter, tokenSymbol, tokenDecimals] = await Promise.all([
+				mockEURPost.balanceOf(normalizedRecipient) as Promise<bigint>,
+
+				mockEURPost.symbol() as Promise<string>,
+
+				mockEURPost.decimals() as Promise<bigint>,
+			]);
+
+			const expectedBalance = balanceBefore + amountInSmallestUnits;
+
+			if (balanceAfter !== expectedBalance) {
+				throw new Error(
+					"Blockchain stanje primatelja ne odgovara očekivanoj količini nakon dodjele sredstava.",
+				);
+			}
+
+			/* =============================================
+			   4. USPJEH
+			   ============================================= */
 
 			setStatusMessage("");
 
 			setSuccessMessage(
-				`Kupcu je dodijeljeno ${normalizedAmount} mEUR. Novo stanje kupca: ${formatUnits(
-					buyerBalance,
-					2,
-				)} mEUR.`,
+				`Kupcu je dodijeljeno ${formatUnits(
+					amountInSmallestUnits,
+					Number(tokenDecimals),
+				)} ${tokenSymbol}. Novo stanje kupca: ${formatUnits(
+					balanceAfter,
+					Number(tokenDecimals),
+				)} ${tokenSymbol}.`,
 			);
 
 			setAmount("");
 		} catch (error) {
 			setStatusMessage("");
+
 			setErrorMessage(getErrorMessage(error));
 		} finally {
 			setIsSubmitting(false);
@@ -226,6 +315,7 @@ export default function MintMockEURForm({ account }: MintMockEURFormProps) {
 			{transactionHash && (
 				<div className="blockchain-value">
 					<span>Hash transakcije</span>
+
 					<code>{transactionHash}</code>
 				</div>
 			)}

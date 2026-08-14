@@ -50,6 +50,17 @@
 }
 
 /* =========================
+   GUMB OSVJEŽI
+
+   Koristi zajednički .secondary-button
+   stil iz shared.css.
+   ========================= */
+
+.purchase-header .secondary-button {
+	flex-shrink: 0;
+}
+
+/* =========================
    STANJE TOKENA
    ========================= */
 
@@ -75,6 +86,10 @@
 
 	background: #101827;
 
+	box-shadow:
+		0 5px 14px rgb(0 0 0 / 8%),
+		inset 0 1px 0 rgb(255 255 255 / 2%);
+
 	transition:
 		border-color 0.22s ease,
 		background 0.22s ease,
@@ -83,7 +98,7 @@
 }
 
 .token-summary div:hover {
-	border-color: #65518f;
+	border-color: #5b4a70;
 
 	background: #131c2e;
 
@@ -91,7 +106,7 @@
 
 	box-shadow:
 		0 10px 24px rgb(0 0 0 / 14%),
-		0 0 0 1px rgb(139 92 246 / 6%);
+		0 0 0 1px rgb(139 92 246 / 5%);
 }
 
 .token-summary span {
@@ -120,10 +135,10 @@
 
 	padding: 8px 12px;
 
-	border: 1px solid rgb(139 92 246 / 35%);
+	border: 1px solid rgb(139 92 246 / 30%);
 	border-radius: 999px;
 
-	background: rgb(109 40 217 / 14%);
+	background: rgb(109 40 217 / 10%);
 	color: #c4b5fd;
 
 	font-size: 14px;
@@ -146,6 +161,9 @@
 
 /* =========================
    ODOBRI SREDSTVA
+
+   Pripremna akcija - namjerno
+   nešto mirnija od kupnje.
    ========================= */
 
 .approve-button {
@@ -153,42 +171,64 @@
 
 	padding: 13px 18px;
 
-	border: 1px solid #6d4bb3;
+	border: 1px solid #68415c;
 	border-radius: 10px;
 
-	background: #5b35a5;
+	background: linear-gradient(135deg, #49283f 0%, #402a52 100%);
+
 	color: #ffffff;
 
 	font-weight: 700;
 
-	box-shadow: none;
+	cursor: pointer;
+
+	box-shadow:
+		0 5px 14px rgb(0 0 0 / 12%),
+		inset 0 1px 0 rgb(255 255 255 / 3%);
 
 	transition:
 		background 0.22s ease,
 		border-color 0.22s ease,
+		color 0.22s ease,
 		transform 0.22s ease,
 		box-shadow 0.22s ease,
 		opacity 0.22s ease;
 }
 
 .approve-button:hover:not(:disabled) {
-	border-color: #a78bfa;
+	border-color: #8a4f78;
 
-	background: linear-gradient(135deg, #6d28d9 0%, #7c3aed 55%, #8b5cf6 100%);
+	background: linear-gradient(135deg, #6f314f 0%, #654076 55%, #7440a1 100%);
+
+	color: #ffffff;
 
 	transform: translateY(-2px);
 
 	box-shadow:
-		0 10px 24px rgb(109 40 217 / 24%),
-		0 0 0 1px rgb(167 139 250 / 12%);
+		0 10px 24px rgb(0 0 0 / 18%),
+		0 7px 20px rgb(124 58 237 / 15%),
+		0 0 0 1px rgb(168 85 247 / 8%);
 }
 
 .approve-button:active:not(:disabled) {
 	transform: translateY(0) scale(0.99);
+
+	box-shadow:
+		0 4px 10px rgb(0 0 0 / 14%),
+		inset 0 1px 3px rgb(0 0 0 / 14%);
+}
+
+.approve-button:focus-visible {
+	outline: 2px solid #a78bfa;
+	outline-offset: 3px;
 }
 
 /* =========================
    KUPI NEKRETNINU
+
+   Glavna akcija kupca.
+   Vizualno je nešto izraženija
+   od odobravanja sredstava.
    ========================= */
 
 .purchase-button {
@@ -196,38 +236,57 @@
 
 	padding: 13px 18px;
 
-	border: 1px solid #8b5cf6;
+	border: 1px solid #81506f;
 	border-radius: 10px;
 
-	background: #6d28d9;
+	background: linear-gradient(135deg, #5f2f4c 0%, #533668 100%);
+
 	color: #ffffff;
 
-	font-weight: 700;
+	font-weight: 800;
 
-	box-shadow: none;
+	cursor: pointer;
+
+	box-shadow:
+		0 7px 18px rgb(0 0 0 / 16%),
+		0 4px 14px rgb(124 58 237 / 8%),
+		inset 0 1px 0 rgb(255 255 255 / 4%);
 
 	transition:
 		background 0.22s ease,
 		border-color 0.22s ease,
+		color 0.22s ease,
 		transform 0.22s ease,
 		box-shadow 0.22s ease,
 		opacity 0.22s ease;
 }
 
 .purchase-button:hover:not(:disabled) {
-	border-color: #c4b5fd;
+	border-color: #a65c83;
 
-	background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 55%, #a78bfa 100%);
+	background: linear-gradient(135deg, #7b3655 0%, #70427d 52%, #8146a8 100%);
+
+	color: #ffffff;
 
 	transform: translateY(-2px);
 
 	box-shadow:
-		0 10px 26px rgb(124 58 237 / 28%),
-		0 0 0 1px rgb(196 181 253 / 14%);
+		0 12px 28px rgb(0 0 0 / 22%),
+		0 8px 24px rgb(124 58 237 / 18%),
+		0 0 0 1px rgb(168 85 247 / 10%);
 }
 
 .purchase-button:active:not(:disabled) {
 	transform: translateY(0) scale(0.99);
+
+	box-shadow:
+		0 5px 14px rgb(0 0 0 / 18%),
+		inset 0 1px 3px rgb(0 0 0 / 14%);
+}
+
+.purchase-button:focus-visible {
+	outline: 2px solid #a78bfa;
+	outline-offset: 3px;
 }
 
 /* =========================
@@ -241,6 +300,7 @@
 	opacity: 0.5;
 
 	transform: none;
+
 	box-shadow: none;
 }
 

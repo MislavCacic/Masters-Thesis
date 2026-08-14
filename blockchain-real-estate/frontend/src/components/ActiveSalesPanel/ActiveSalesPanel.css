@@ -50,6 +50,17 @@
 }
 
 /* =========================
+   GUMB OSVJEŽI
+
+   Koristi zajednički .secondary-button
+   stil iz shared.css.
+   ========================= */
+
+.active-sales-header .secondary-button {
+	flex-shrink: 0;
+}
+
+/* =========================
    DETALJI AKTIVNE PRODAJE
    ========================= */
 
@@ -67,46 +78,65 @@
 	margin-top: 20px;
 	padding: 13px 18px;
 
-	border: 1px solid #6755a4;
+	border: 1px solid #85404a;
 	border-radius: 10px;
 
-	background: #51408d;
+	background: linear-gradient(135deg, #542a32 0%, #482832 100%);
+
 	color: #ffffff;
 
 	font-weight: 700;
 
-	box-shadow: none;
+	cursor: pointer;
+
+	box-shadow:
+		0 5px 14px rgb(0 0 0 / 12%),
+		inset 0 1px 0 rgb(255 255 255 / 3%);
 
 	transition:
 		background 0.22s ease,
 		border-color 0.22s ease,
+		color 0.22s ease,
 		transform 0.22s ease,
 		box-shadow 0.22s ease,
 		opacity 0.22s ease;
 }
 
 .cancel-sale-button:hover:not(:disabled) {
-	border-color: #8e78d2;
+	border-color: #b4535f;
 
-	background: linear-gradient(135deg, #6250a7 0%, #7259bf 55%, #8067cd 100%);
+	background: linear-gradient(135deg, #7a303b 0%, #8f3745 55%, #a33f50 100%);
+
+	color: #ffffff;
 
 	transform: translateY(-2px);
 
 	box-shadow:
-		0 9px 22px rgb(83 61 145 / 24%),
-		0 0 0 1px rgb(158 139 214 / 9%);
+		0 10px 24px rgb(0 0 0 / 20%),
+		0 7px 20px rgb(153 27 27 / 18%),
+		0 0 0 1px rgb(239 68 68 / 9%);
 }
 
 .cancel-sale-button:active:not(:disabled) {
 	transform: translateY(0) scale(0.98);
+
+	box-shadow:
+		0 4px 10px rgb(0 0 0 / 14%),
+		inset 0 1px 3px rgb(0 0 0 / 16%);
+}
+
+.cancel-sale-button:focus-visible {
+	outline: 2px solid #f87171;
+	outline-offset: 3px;
 }
 
 .cancel-sale-button:disabled {
 	cursor: not-allowed;
 
-	opacity: 0.55;
+	opacity: 0.5;
 
 	transform: none;
+
 	box-shadow: none;
 }
 

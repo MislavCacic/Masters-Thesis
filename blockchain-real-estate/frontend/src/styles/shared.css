@@ -2,6 +2,25 @@
 	box-sizing: border-box;
 }
 
+:root {
+	/* =========================
+	   ZAJEDNIČKA PALETA GUMBA
+	   ========================= */
+
+	--button-bg-start: var(--accent-2);
+	--button-bg-end: #49305f;
+
+	--button-border: #74425f;
+
+	--button-hover-start: var(--accent-2-hover);
+	--button-hover-middle: #654076;
+	--button-hover-end: var(--accent-hover);
+
+	--button-focus: var(--accent-light);
+
+	--button-text: #ffffff;
+}
+
 button,
 input,
 select,
@@ -17,16 +36,23 @@ button {
 	width: 100%;
 	padding: 13px 18px;
 
-	border: 1px solid #7c3aed;
+	border: 1px solid var(--button-border);
 	border-radius: 10px;
 
-	background: #6d28d9;
-	color: #ffffff;
+	background: linear-gradient(
+		135deg,
+		var(--button-bg-start) 0%,
+		var(--button-bg-end) 100%
+	);
+
+	color: var(--button-text);
 
 	font-weight: 700;
 	cursor: pointer;
 
-	box-shadow: none;
+	box-shadow:
+		0 6px 16px rgb(0 0 0 / 14%),
+		inset 0 1px 0 rgb(255 255 255 / 4%);
 
 	transition:
 		background 0.22s ease,
@@ -38,34 +64,45 @@ button {
 }
 
 button:hover:not(:disabled) {
-	border-color: #a855f7;
+	border-color: #965779;
 
-	background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 55%, #a855f7 100%);
+	background: linear-gradient(
+		135deg,
+		var(--button-hover-start) 0%,
+		var(--button-hover-middle) 52%,
+		var(--button-hover-end) 100%
+	);
 
 	color: #ffffff;
 
 	transform: translateY(-2px);
 
 	box-shadow:
-		0 10px 24px rgb(124 58 237 / 25%),
-		0 0 0 1px rgb(168 85 247 / 14%);
+		0 12px 28px rgb(0 0 0 / 22%),
+		0 8px 24px rgb(112 66 143 / 18%),
+		0 0 0 1px rgb(129 70 168 / 10%);
 }
 
 button:active:not(:disabled) {
 	transform: translateY(0) scale(0.99);
+
+	box-shadow:
+		0 5px 14px rgb(0 0 0 / 18%),
+		inset 0 1px 3px rgb(0 0 0 / 14%);
 }
 
 button:focus-visible {
-	outline: 2px solid #a78bfa;
+	outline: 2px solid var(--button-focus);
 	outline-offset: 3px;
 }
 
 button:disabled {
 	cursor: not-allowed;
 
-	opacity: 0.55;
+	opacity: 0.5;
 
 	transform: none;
+
 	box-shadow: none;
 }
 
@@ -79,30 +116,34 @@ button:disabled {
 
 	padding: 10px 16px;
 
-	border: 1px solid #7c3aed;
+	border: 1px solid #68415c;
 	border-radius: 10px;
 
-	background: #6d28d9;
+	background: linear-gradient(135deg, #49283f 0%, #402a52 100%);
+
 	color: #ffffff;
 
 	font-size: 12px;
 	font-weight: 700;
 
-	box-shadow: none;
+	box-shadow:
+		0 5px 14px rgb(0 0 0 / 12%),
+		inset 0 1px 0 rgb(255 255 255 / 3%);
 }
 
 .secondary-button:hover:not(:disabled) {
-	border-color: #a855f7;
+	border-color: #965779;
 
-	background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 55%, #a855f7 100%);
+	background: linear-gradient(135deg, #6f314f 0%, #654076 55%, #70428f 100%);
 
 	color: #ffffff;
 
 	transform: translateY(-2px);
 
 	box-shadow:
-		0 10px 24px rgb(124 58 237 / 25%),
-		0 0 0 1px rgb(168 85 247 / 14%);
+		0 10px 24px rgb(0 0 0 / 18%),
+		0 7px 20px rgb(112 66 143 / 15%),
+		0 0 0 1px rgb(129 70 168 / 8%);
 }
 
 /* =========================
@@ -112,7 +153,7 @@ button:disabled {
 .eyebrow {
 	margin: 0 0 18px;
 
-	color: #c4b5fd;
+	color: var(--accent-light);
 
 	font-size: 13px;
 	font-weight: 700;
@@ -167,11 +208,11 @@ button:disabled {
 	margin: 22px 0 0;
 	padding: 14px 16px;
 
-	border: 1px solid rgb(139 92 246 / 35%);
+	border: 1px solid rgb(112 66 143 / 35%);
 	border-radius: 10px;
 
 	background: #151b2e;
-	color: #c4b5fd;
+	color: var(--accent-light);
 
 	font-size: 13px;
 	line-height: 1.5;
@@ -194,7 +235,9 @@ button:disabled {
 	line-height: 1.5;
 }
 
-/* USPJEŠNA TRANSAKCIJA */
+/* =========================
+   USPJEŠNA TRANSAKCIJA
+   ========================= */
 
 .success-result {
 	border: 1px solid rgb(34 197 94 / 40%);
@@ -236,7 +279,7 @@ button:disabled {
 
 	box-shadow:
 		0 8px 20px rgb(0 0 0 / 12%),
-		0 0 0 1px rgb(139 92 246 / 5%);
+		0 0 0 1px rgb(112 66 143 / 5%);
 }
 
 .blockchain-value span {
@@ -253,7 +296,7 @@ button:disabled {
 }
 
 .blockchain-value code {
-	color: #c4b5fd;
+	color: var(--accent-light);
 
 	font-size: 13px;
 
@@ -323,17 +366,21 @@ button:disabled {
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus {
-	border-color: #8b5cf6;
+	border-color: var(--accent-hover);
 
 	background: #111827;
 
-	box-shadow: 0 0 0 3px rgb(139 92 246 / 14%);
+	box-shadow: 0 0 0 3px rgb(112 66 143 / 14%);
 }
 
 .form-field input::placeholder,
 .form-field textarea::placeholder {
 	color: #66748a;
 }
+
+/* =========================
+   FILE INPUT
+   ========================= */
 
 .form-field input[type="file"] {
 	padding: 10px;
@@ -343,10 +390,11 @@ button:disabled {
 	margin-right: 12px;
 	padding: 8px 12px;
 
-	border: 1px solid #6d4bb3;
+	border: 1px solid #68415c;
 	border-radius: 8px;
 
-	background: #4c2d8c;
+	background: linear-gradient(135deg, #49283f 0%, #402a52 100%);
+
 	color: #ffffff;
 
 	font-weight: 600;
@@ -354,13 +402,21 @@ button:disabled {
 
 	transition:
 		background 0.2s ease,
-		border-color 0.2s ease;
+		border-color 0.2s ease,
+		transform 0.2s ease,
+		box-shadow 0.2s ease;
 }
 
 .form-field input[type="file"]::file-selector-button:hover {
-	border-color: #8b5cf6;
+	border-color: #965779;
 
-	background: #5b35a5;
+	background: linear-gradient(135deg, #6f314f 0%, #654076 55%, #70428f 100%);
+
+	transform: translateY(-1px);
+
+	box-shadow:
+		0 6px 16px rgb(0 0 0 / 16%),
+		0 5px 14px rgb(112 66 143 / 12%);
 }
 
 /* =========================
@@ -418,7 +474,7 @@ button:disabled {
 
 	box-shadow:
 		0 12px 28px rgb(0 0 0 / 16%),
-		0 0 0 1px rgb(139 92 246 / 5%);
+		0 0 0 1px rgb(112 66 143 / 5%);
 }
 
 /* =========================
@@ -448,7 +504,7 @@ button:disabled {
 }
 
 .property-id {
-	color: #a78bfa;
+	color: var(--accent-light);
 
 	font-size: 13px;
 	font-weight: 700;
@@ -528,7 +584,9 @@ button:disabled {
 	line-height: 1;
 }
 
-/* NA ČEKANJU */
+/* =========================
+   NA ČEKANJU
+   ========================= */
 
 .status-pending {
 	border: 1px solid rgb(245 158 11 / 40%);
@@ -537,7 +595,9 @@ button:disabled {
 	color: #fcd34d;
 }
 
-/* POTVRĐENO */
+/* =========================
+   POTVRĐENO
+   ========================= */
 
 .status-verified {
 	border: 1px solid rgb(34 197 94 / 40%);
@@ -546,7 +606,9 @@ button:disabled {
 	color: #86efac;
 }
 
-/* ODBIJENO */
+/* =========================
+   ODBIJENO
+   ========================= */
 
 .status-rejected {
 	border: 1px solid rgb(239 68 68 / 40%);
@@ -555,7 +617,9 @@ button:disabled {
 	color: #fca5a5;
 }
 
-/* NEPOZNAT STATUS */
+/* =========================
+   NEPOZNAT STATUS
+   ========================= */
 
 .status-unknown {
 	border: 1px solid #475569;

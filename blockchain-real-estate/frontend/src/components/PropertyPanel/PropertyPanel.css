@@ -59,16 +59,19 @@
 
 	padding: 10px 16px;
 
-	border: 1px solid #7c3aed;
+	border: 1px solid #68415c;
 	border-radius: 10px;
 
-	background: #6d28d9;
+	background: linear-gradient(135deg, #49283f 0%, #402a52 100%);
+
 	color: #ffffff;
 
 	font-size: 12px;
 	font-weight: 700;
 
-	box-shadow: none;
+	box-shadow:
+		0 5px 14px rgb(0 0 0 / 12%),
+		inset 0 1px 0 rgb(255 255 255 / 3%);
 
 	transition:
 		background 0.22s ease,
@@ -79,25 +82,35 @@
 }
 
 .portfolio-header .secondary-button:hover:not(:disabled) {
-	border-color: #a855f7;
+	border-color: #8a4f78;
 
-	background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 55%, #a855f7 100%);
+	background: linear-gradient(135deg, #6f314f 0%, #654076 55%, #7440a1 100%);
 
 	transform: translateY(-2px);
 
 	box-shadow:
-		0 10px 24px rgb(124 58 237 / 25%),
-		0 0 0 1px rgb(168 85 247 / 14%);
+		0 10px 24px rgb(0 0 0 / 18%),
+		0 7px 20px rgb(124 58 237 / 15%),
+		0 0 0 1px rgb(168 85 247 / 8%);
 }
 
 .portfolio-header .secondary-button:active:not(:disabled) {
 	transform: translateY(0) scale(0.98);
+
+	box-shadow:
+		0 4px 10px rgb(0 0 0 / 14%),
+		inset 0 1px 3px rgb(0 0 0 / 14%);
+}
+
+.portfolio-header .secondary-button:focus-visible {
+	outline: 2px solid #a78bfa;
+	outline-offset: 3px;
 }
 
 .portfolio-header .secondary-button:disabled {
 	cursor: not-allowed;
 
-	opacity: 0.55;
+	opacity: 0.5;
 
 	transform: none;
 	box-shadow: none;
@@ -159,13 +172,21 @@
 .portfolio-card .blockchain-value {
 	transition:
 		border-color 0.2s ease,
-		background 0.2s ease;
+		background 0.2s ease,
+		transform 0.2s ease,
+		box-shadow 0.2s ease;
 }
 
 .portfolio-card .blockchain-value:hover {
 	border-color: #51426f;
 
 	background: #111827;
+
+	transform: translateY(-1px);
+
+	box-shadow:
+		0 8px 20px rgb(0 0 0 / 12%),
+		0 0 0 1px rgb(139 92 246 / 5%);
 }
 
 /* =========================
