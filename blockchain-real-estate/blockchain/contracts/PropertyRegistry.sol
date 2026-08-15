@@ -45,11 +45,17 @@ contract PropertyRegistry is AccessControl {
     /**
      * @notice Dokument povezan s određenom nekretninom.
      *
-     * Na blockchain se ne sprema sadržaj dokumenta,
-     * nego samo njegov kriptografski hash.
+     * Sadržaj dokumenta ne sprema se izravno na blockchain.
+     *
+     * documentHash predstavlja kriptografski hash sadržaja dokumenta
+     * i koristi se za provjeru integriteta.
+     *
+     * documentURI predstavlja referencu na dokument pohranjen
+     * izvan blockchaina, primjerice IPFS URI.
      */
     struct PropertyDocument {
         bytes32 documentHash;
+        string documentURI;
         VerificationStatus verificationStatus;
         bool submitted;
     }
@@ -103,6 +109,7 @@ contract PropertyRegistry is AccessControl {
         uint256 indexed propertyId,
         DocumentType indexed documentType,
         bytes32 documentHash,
+        string documentURI,
         address indexed submittedBy
     );
 
@@ -231,7 +238,12 @@ contract PropertyRegistry is AccessControl {
     /**
      * @notice Predaje jedan od obveznih dokumenata nekretnine.
      *
-     * Na blockchain se sprema samo hash dokumenta.
+     * Sadržaj dokumenta ne sprema se izravno na blockchain.
+     *
+     * Na blockchain se sprema:
+     * - kriptografski hash dokumenta
+     * - URI dokumenta pohranjenog izvan blockchaina
+     *
      * Dokument može predati samo trenutačni digitalni vlasnik.
      *
      * Odbijeni dokument moguće je ponovno predati.
@@ -240,11 +252,13 @@ contract PropertyRegistry is AccessControl {
      * @param propertyId ID nekretnine.
      * @param documentType Vrsta dokumenta.
      * @param documentHash Kriptografski hash dokumenta.
+     * @param documentURI URI dokumenta pohranjenog izvan blockchaina.
      */
     function submitPropertyDocument(
         uint256 propertyId,
         DocumentType documentType,
-        bytes32 documentHash
+        bytes32 documentHash,
+        string calldata documentURI
     ) external {
         require(properties[propertyId].exists, "Nekretnina ne postoji");
 
@@ -254,6 +268,8 @@ contract PropertyRegistry is AccessControl {
         );
 
         require(documentHash != bytes32(0), "Hash dokumenta nije valjan");
+
+        require(bytes(documentURI).length > 0, "URI dokumenta je obavezan");
 
         PropertyDocument storage document = propertyDocuments[propertyId][
             documentType
@@ -265,6 +281,7 @@ contract PropertyRegistry is AccessControl {
         );
 
         document.documentHash = documentHash;
+        document.documentURI = documentURI;
         document.verificationStatus = VerificationStatus.Pending;
         document.submitted = true;
 
@@ -274,6 +291,7 @@ contract PropertyRegistry is AccessControl {
             propertyId,
             documentType,
             documentHash,
+            documentURI,
             msg.sender
         );
     }
@@ -421,6 +439,12 @@ contract PropertyRegistry is AccessControl {
 
     /**
      * @notice Vraća pojedinačni dokument nekretnine.
+     *
+     * Povratna vrijednost sadrži:
+     * - hash dokumenta
+     * - URI dokumenta
+     * - status verifikacije
+     * - informaciju je li dokument predan
      */
     function getPropertyDocument(
         uint256 propertyId,

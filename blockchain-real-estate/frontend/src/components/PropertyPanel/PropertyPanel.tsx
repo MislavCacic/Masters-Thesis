@@ -31,6 +31,7 @@ interface PropertyDocumentData {
 	documentType: DocumentType;
 	name: string;
 	documentHash: string;
+	documentURI: string;
 	verificationStatus: number;
 	submitted: boolean;
 }
@@ -259,6 +260,8 @@ export default function PropertyPanel({
 
 						documentHash: landRegistryDocument.documentHash as string,
 
+						documentURI: landRegistryDocument.documentURI as string,
+
 						verificationStatus: Number(landRegistryDocument.verificationStatus),
 
 						submitted: landRegistryDocument.submitted as boolean,
@@ -270,6 +273,8 @@ export default function PropertyPanel({
 
 						documentHash: cadastralDocument.documentHash as string,
 
+						documentURI: cadastralDocument.documentURI as string,
+
 						verificationStatus: Number(cadastralDocument.verificationStatus),
 
 						submitted: cadastralDocument.submitted as boolean,
@@ -280,6 +285,8 @@ export default function PropertyPanel({
 						name: DOCUMENT_DEFINITIONS[2].name,
 
 						documentHash: ownershipDocument.documentHash as string,
+
+						documentURI: ownershipDocument.documentURI as string,
 
 						verificationStatus: Number(ownershipDocument.verificationStatus),
 
@@ -351,8 +358,8 @@ export default function PropertyPanel({
 
 					<p>
 						{showAll
-							? "Pregled svih nekretnina registriranih u blockchain sustavu."
-							: "Pregled nekretnina čiji je povezani račun trenutačni digitalni vlasnik."}
+							? "Pregled svih nekretnina registriranih u blockchain sustavu, uključujući status i dokumentaciju."
+							: "Pregled nekretnina čiji je povezani račun trenutačni digitalni vlasnik, zajedno s dokumentacijom evidentiranom na blockchainu."}
 					</p>
 				</div>
 
@@ -469,11 +476,10 @@ export default function PropertyPanel({
 
 									const documentStatusClass = getDocumentStatusClass(document);
 
+									const documentKey = `${property.id.toString()}-${document.documentType}`;
+
 									return (
-										<div
-											className="property-item"
-											key={`${property.id.toString()}-${document.documentType}`}
-										>
+										<div className="property-item" key={documentKey}>
 											<div className="property-item-heading">
 												<div>
 													<span className="property-id">Obvezni dokument</span>
@@ -489,13 +495,40 @@ export default function PropertyPanel({
 											</div>
 
 											{document.submitted ? (
-												<div className="blockchain-value">
-													<span>Hash dokumenta</span>
+												<>
+													<div className="blockchain-value">
+														<span>Hash dokumenta</span>
 
-													<code title={document.documentHash}>
-														{shortenHash(document.documentHash)}
-													</code>
-												</div>
+														<code title={document.documentHash}>
+															{shortenHash(document.documentHash)}
+														</code>
+													</div>
+
+													<div className="blockchain-value">
+														<span>Adresa dokumenta</span>
+
+														<code title={document.documentURI}>
+															{document.documentURI || "Nije evidentirana"}
+														</code>
+													</div>
+
+													{document.documentURI ? (
+														<div className="verification-actions">
+															<a
+																href={document.documentURI}
+																target="_blank"
+																rel="noreferrer"
+																className="secondary-button"
+															>
+																Pregledaj dokument
+															</a>
+														</div>
+													) : (
+														<p className="error">
+															Dokument nema evidentiranu adresu za pregled.
+														</p>
+													)}
+												</>
 											) : (
 												<p className="empty-state">Dokument još nije predan.</p>
 											)}
