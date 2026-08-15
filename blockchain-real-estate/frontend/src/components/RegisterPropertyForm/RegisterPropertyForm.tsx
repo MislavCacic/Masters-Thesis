@@ -17,6 +17,7 @@ interface RegisterPropertyFormProps {
 }
 
 const LOCAL_RPC_URL = "http://127.0.0.1:8545";
+const DOCUMENT_STORAGE_URL = "http://127.0.0.1:3001";
 
 const DOCUMENT_TYPE = {
 	LAND_REGISTRY_EXTRACT: 0,
@@ -32,6 +33,12 @@ interface DocumentHashes {
 	ownershipDocument: string;
 }
 
+interface DocumentURIs {
+	landRegistryExtract: string;
+	cadastralDocument: string;
+	ownershipDocument: string;
+}
+
 interface DocumentTransactionHashes {
 	landRegistryExtract: string;
 	cadastralDocument: string;
@@ -39,8 +46,23 @@ interface DocumentTransactionHashes {
 }
 
 type DocumentTransactionKey = keyof DocumentTransactionHashes;
+type DocumentURIKey = keyof DocumentURIs;
+
+interface UploadResponse {
+	documentURI: string;
+	fileName: string;
+	originalName: string;
+	mimeType: string;
+	size: number;
+}
 
 const EMPTY_DOCUMENT_HASHES: DocumentHashes = {
+	landRegistryExtract: "",
+	cadastralDocument: "",
+	ownershipDocument: "",
+};
+
+const EMPTY_DOCUMENT_URIS: DocumentURIs = {
 	landRegistryExtract: "",
 	cadastralDocument: "",
 	ownershipDocument: "",
@@ -91,6 +113,58 @@ async function calculateFileHash(file: File): Promise<string> {
 	return keccak256(fileBytes);
 }
 
+async function uploadDocument(file: File): Promise<UploadResponse> {
+	const formData = new FormData();
+
+	formData.append("document", file);
+
+	let response: Response;
+
+	try {
+		response = await fetch(`${DOCUMENT_STORAGE_URL}/upload`, {
+			method: "POST",
+			body: formData,
+		});
+	} catch {
+		throw new Error(
+			"Document Storage Server nije dostupan. Pokreni ga naredbom: npm run dev:storage",
+		);
+	}
+
+	let responseData: unknown;
+
+	try {
+		responseData = await response.json();
+	} catch {
+		throw new Error("Document Storage Server vratio je neispravan odgovor.");
+	}
+
+	if (!response.ok) {
+		const errorResponse = responseData as {
+			error?: unknown;
+		};
+
+		if (typeof errorResponse.error === "string") {
+			throw new Error(errorResponse.error);
+		}
+
+		throw new Error("Upload dokumenta nije uspio.");
+	}
+
+	const uploadResponse = responseData as Partial<UploadResponse>;
+
+	if (
+		typeof uploadResponse.documentURI !== "string" ||
+		!uploadResponse.documentURI.trim()
+	) {
+		throw new Error(
+			"Document Storage Server nije vratio URI spremljenog dokumenta.",
+		);
+	}
+
+	return uploadResponse as UploadResponse;
+}
+
 async function createReadRegistry(): Promise<Contract> {
 	const provider = new JsonRpcProvider(LOCAL_RPC_URL);
 
@@ -135,18 +209,8 @@ export default function RegisterPropertyForm({
 
 	const [errorMessage, setErrorMessage] = useState("");
 
-	/*
-	 * ID koji prikazujemo korisniku nakon
-	 * registracije nekretnine.
-	 */
 	const [registeredPropertyId, setRegisteredPropertyId] = useState("");
 
-	/*
-	 * Ako registracija nekretnine uspije, ali jedna
-	 * od predaja dokumenata ne uspije, ovaj ID
-	 * pamtimo kako bi korisnik mogao nastaviti
-	 * predaju bez ponovne registracije nekretnine.
-	 */
 	const [pendingPropertyId, setPendingPropertyId] = useState<bigint | null>(
 		null,
 	);
@@ -157,6 +221,9 @@ export default function RegisterPropertyForm({
 	const [documentHashes, setDocumentHashes] = useState<DocumentHashes>(
 		EMPTY_DOCUMENT_HASHES,
 	);
+
+	const [documentURIs, setDocumentURIs] =
+		useState<DocumentURIs>(EMPTY_DOCUMENT_URIS);
 
 	const [documentTransactionHashes, setDocumentTransactionHashes] =
 		useState<DocumentTransactionHashes>(EMPTY_DOCUMENT_TRANSACTION_HASHES);
@@ -182,6 +249,7 @@ export default function RegisterPropertyForm({
 		setRegistrationTransactionHash("");
 
 		setDocumentHashes(EMPTY_DOCUMENT_HASHES);
+		setDocumentURIs(EMPTY_DOCUMENT_URIS);
 
 		setDocumentTransactionHashes(EMPTY_DOCUMENT_TRANSACTION_HASHES);
 	}, [account]);
@@ -192,14 +260,18 @@ export default function RegisterPropertyForm({
 		propertyId: bigint,
 		documentType: DocumentType,
 		documentName: string,
+		file: File,
 		documentHash: string,
 		step: string,
 		transactionKey: DocumentTransactionKey,
-	): Promise<void> {
+		uriKey: DocumentURIKey,
+	): Promise<string> {
 		/*
-		 * Prvo provjeravamo postoji li dokument već
-		 * na blockchainu. Ovo omogućuje nastavak
-		 * djelomično završene registracije.
+		 * Prije uploada provjeravamo postoji li dokument
+		 * već na blockchainu.
+		 *
+		 * Time kod nastavka djelomično završene registracije
+		 * ne uploadamo istu datoteku ponovno bez potrebe.
 		 */
 		const existingDocument = await propertyRegistryRead.getPropertyDocument(
 			propertyId,
@@ -211,23 +283,57 @@ export default function RegisterPropertyForm({
 		if (alreadySubmitted) {
 			const existingHash = existingDocument.documentHash as string;
 
+			const existingURI = existingDocument.documentURI as string;
+
 			if (existingHash.toLowerCase() !== documentHash.toLowerCase()) {
 				throw new Error(
 					`${documentName} već je predan za ovu nekretninu, ali njegov blockchain hash ne odgovara trenutno odabranoj datoteci.`,
 				);
 			}
 
-			return;
+			if (!existingURI.trim()) {
+				throw new Error(
+					`${documentName} postoji na blockchainu, ali nema spremljen URI dokumenta.`,
+				);
+			}
+
+			setDocumentURIs((previous) => ({
+				...previous,
+				[uriKey]: existingURI,
+			}));
+
+			return existingURI;
 		}
 
+		/*
+		 * Datoteka se prvo sprema izvan blockchaina.
+		 */
 		setStatusMessage(
-			`${step} Potvrdi predaju dokumenta "${documentName}" u MetaMasku...`,
+			`${step} Sprema se dokument "${documentName}" u off-chain spremište...`,
+		);
+
+		const uploadResult = await uploadDocument(file);
+
+		const documentURI = uploadResult.documentURI;
+
+		setDocumentURIs((previous) => ({
+			...previous,
+			[uriKey]: documentURI,
+		}));
+
+		/*
+		 * Nakon uspješnog uploada blockchainu šaljemo
+		 * i hash i URI dokumenta.
+		 */
+		setStatusMessage(
+			`${step} Dokument je spremljen. Potvrdi blockchain predaju dokumenta "${documentName}" u MetaMasku...`,
 		);
 
 		const transaction = await propertyRegistryWrite.submitPropertyDocument(
 			propertyId,
 			documentType,
 			documentHash,
+			documentURI,
 		);
 
 		setDocumentTransactionHashes((previous) => ({
@@ -254,8 +360,8 @@ export default function RegisterPropertyForm({
 		}
 
 		/*
-		 * Nakon MetaMask WRITE operacije stvarno stanje
-		 * ponovno čitamo direktno s Hardhat nodea.
+		 * Stvarno blockchain stanje ponovno čitamo
+		 * direktno s lokalnog Hardhat nodea.
 		 */
 		const submittedDocument = await propertyRegistryRead.getPropertyDocument(
 			propertyId,
@@ -265,6 +371,8 @@ export default function RegisterPropertyForm({
 		const submitted = submittedDocument.submitted as boolean;
 
 		const storedHash = submittedDocument.documentHash as string;
+
+		const storedURI = submittedDocument.documentURI as string;
 
 		if (!submitted) {
 			throw new Error(
@@ -277,6 +385,14 @@ export default function RegisterPropertyForm({
 				`Blockchain hash dokumenta "${documentName}" ne odgovara očekivanoj vrijednosti.`,
 			);
 		}
+
+		if (storedURI !== documentURI) {
+			throw new Error(
+				`Blockchain URI dokumenta "${documentName}" ne odgovara URI-ju spremljene datoteke.`,
+			);
+		}
+
+		return documentURI;
 	}
 
 	async function handleSubmit(
@@ -288,16 +404,14 @@ export default function RegisterPropertyForm({
 		setSuccessMessage("");
 		setStatusMessage("");
 
-		/*
-		 * Ako nastavljamo djelomično završenu registraciju,
-		 * ne brišemo postojeće ID-eve i hashove transakcija.
-		 */
 		if (pendingPropertyId === null) {
 			setRegisteredPropertyId("");
 
 			setRegistrationTransactionHash("");
 
 			setDocumentTransactionHashes(EMPTY_DOCUMENT_TRANSACTION_HASHES);
+
+			setDocumentURIs(EMPTY_DOCUMENT_URIS);
 		}
 
 		setDocumentHashes(EMPTY_DOCUMENT_HASHES);
@@ -425,9 +539,6 @@ export default function RegisterPropertyForm({
 					throw new Error("Registracija nekretnine nije uspješno izvršena.");
 				}
 
-				/*
-				 * Property ID očitavamo iz blockchain eventa.
-				 */
 				for (const log of registrationReceipt.logs) {
 					try {
 						const parsedLog = propertyRegistryWrite.interface.parseLog(log);
@@ -446,18 +557,10 @@ export default function RegisterPropertyForm({
 					throw new Error("Nije moguće očitati ID registrirane nekretnine.");
 				}
 
-				/*
-				 * Od ovog trenutka registracija nekretnine
-				 * postoji i eventualni nastavak više ne
-				 * smije ponovno zvati registerProperty().
-				 */
 				setPendingPropertyId(createdPropertyId);
 
 				setRegisteredPropertyId(createdPropertyId.toString());
 
-				/*
-				 * Provjera stvarnog blockchain zapisa.
-				 */
 				const registeredProperty =
 					await propertyRegistryRead.getProperty(createdPropertyId);
 
@@ -475,9 +578,6 @@ export default function RegisterPropertyForm({
 					);
 				}
 			} else {
-				/*
-				 * Nastavak prethodno prekinute predaje.
-				 */
 				setRegisteredPropertyId(createdPropertyId.toString());
 
 				const existingProperty =
@@ -502,36 +602,42 @@ export default function RegisterPropertyForm({
 			   5. PREDAJA 3 OBVEZNA DOKUMENTA
 			   ============================================= */
 
-			await submitDocumentIfNeeded(
+			const landRegistryExtractURI = await submitDocumentIfNeeded(
 				propertyRegistryWrite,
 				propertyRegistryRead,
 				createdPropertyId,
 				DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT,
 				"Zemljišnoknjižni izvadak",
+				landRegistryExtractFile,
 				landRegistryExtractHash,
 				"2/4",
 				"landRegistryExtract",
+				"landRegistryExtract",
 			);
 
-			await submitDocumentIfNeeded(
+			const cadastralDocumentURI = await submitDocumentIfNeeded(
 				propertyRegistryWrite,
 				propertyRegistryRead,
 				createdPropertyId,
 				DOCUMENT_TYPE.CADASTRAL_DOCUMENT,
 				"Katastarski dokument",
+				cadastralDocumentFile,
 				cadastralDocumentHash,
 				"3/4",
 				"cadastralDocument",
+				"cadastralDocument",
 			);
 
-			await submitDocumentIfNeeded(
+			const ownershipDocumentURI = await submitDocumentIfNeeded(
 				propertyRegistryWrite,
 				propertyRegistryRead,
 				createdPropertyId,
 				DOCUMENT_TYPE.OWNERSHIP_DOCUMENT,
 				"Dokaz / osnova vlasništva",
+				ownershipDocumentFile,
 				ownershipDocumentHash,
 				"4/4",
+				"ownershipDocument",
 				"ownershipDocument",
 			);
 
@@ -611,6 +717,22 @@ export default function RegisterPropertyForm({
 				throw new Error("Hash dokaza vlasništva na blockchainu nije ispravan.");
 			}
 
+			if ((landDocument.documentURI as string) !== landRegistryExtractURI) {
+				throw new Error(
+					"URI zemljišnoknjižnog izvatka na blockchainu nije ispravan.",
+				);
+			}
+
+			if ((cadastralDocument.documentURI as string) !== cadastralDocumentURI) {
+				throw new Error(
+					"URI katastarskog dokumenta na blockchainu nije ispravan.",
+				);
+			}
+
+			if ((ownershipDocument.documentURI as string) !== ownershipDocumentURI) {
+				throw new Error("URI dokaza vlasništva na blockchainu nije ispravan.");
+			}
+
 			const finalVerificationStatus = Number(finalProperty.verificationStatus);
 
 			/* =============================================
@@ -620,14 +742,11 @@ export default function RegisterPropertyForm({
 			setStatusMessage("");
 
 			setSuccessMessage(
-				`Nekretnina je registrirana i sva 3 obvezna dokumenta su predana. ID nekretnine: ${createdPropertyId.toString()}. Status dokumentacije: ${getPropertyStatusLabel(
+				`Nekretnina je registrirana i sva 3 obvezna dokumenta su predana. Dokumenti su spremljeni izvan blockchaina, dok su njihov hash i URI evidentirani na blockchainu. ID nekretnine: ${createdPropertyId.toString()}. Status dokumentacije: ${getPropertyStatusLabel(
 					finalVerificationStatus,
-				)}. Verifikator sada mora provjeriti svaki dokument zasebno.`,
+				)}. Verifikator sada može pregledati i provjeriti svaki dokument zasebno.`,
 			);
 
-			/*
-			 * Više nema nedovršene registracije.
-			 */
 			setPendingPropertyId(null);
 
 			setCadastralMunicipality("");
@@ -682,8 +801,9 @@ export default function RegisterPropertyForm({
 				<h2>Registracija nekretnine</h2>
 
 				<p>
-					Povezani račun postaje početni digitalni vlasnik. Nakon registracije
-					potrebno je predati sva tri obvezna dokumenta.
+					Povezani račun postaje početni digitalni vlasnik. Dokumenti se
+					spremaju izvan blockchaina, dok se njihov kriptografski hash i URI
+					zapisuju na blockchain.
 				</p>
 			</div>
 
@@ -762,7 +882,8 @@ export default function RegisterPropertyForm({
 					/>
 
 					<small>
-						Na blockchain se sprema samo kriptografski hash dokumenta.
+						Datoteka se sprema izvan blockchaina. Na blockchain se zapisuju hash
+						i URI dokumenta.
 					</small>
 				</label>
 
@@ -780,7 +901,7 @@ export default function RegisterPropertyForm({
 						required
 					/>
 
-					<small>Izvorna datoteka ne sprema se na blockchain.</small>
+					<small>Izvorna datoteka nije pohranjena izravno na blockchain.</small>
 				</label>
 
 				<label className="form-field">
@@ -797,7 +918,10 @@ export default function RegisterPropertyForm({
 						required
 					/>
 
-					<small>Na blockchain se zapisuje samo hash sadržaja dokumenta.</small>
+					<small>
+						Verifikator dokument može pregledati putem URI-ja evidentiranog na
+						blockchainu.
+					</small>
 				</label>
 
 				<button type="submit" disabled={isSubmitting}>
@@ -835,6 +959,20 @@ export default function RegisterPropertyForm({
 				</div>
 			)}
 
+			{documentURIs.landRegistryExtract && (
+				<div className="blockchain-value">
+					<span>URI zemljišnoknjižnog izvatka</span>
+
+					<a
+						href={documentURIs.landRegistryExtract}
+						target="_blank"
+						rel="noreferrer"
+					>
+						{documentURIs.landRegistryExtract}
+					</a>
+				</div>
+			)}
+
 			{documentHashes.cadastralDocument && (
 				<div className="blockchain-value">
 					<span>Hash katastarskog dokumenta</span>
@@ -843,11 +981,39 @@ export default function RegisterPropertyForm({
 				</div>
 			)}
 
+			{documentURIs.cadastralDocument && (
+				<div className="blockchain-value">
+					<span>URI katastarskog dokumenta</span>
+
+					<a
+						href={documentURIs.cadastralDocument}
+						target="_blank"
+						rel="noreferrer"
+					>
+						{documentURIs.cadastralDocument}
+					</a>
+				</div>
+			)}
+
 			{documentHashes.ownershipDocument && (
 				<div className="blockchain-value">
 					<span>Hash dokaza vlasništva</span>
 
 					<code>{documentHashes.ownershipDocument}</code>
+				</div>
+			)}
+
+			{documentURIs.ownershipDocument && (
+				<div className="blockchain-value">
+					<span>URI dokaza vlasništva</span>
+
+					<a
+						href={documentURIs.ownershipDocument}
+						target="_blank"
+						rel="noreferrer"
+					>
+						{documentURIs.ownershipDocument}
+					</a>
 				</div>
 			)}
 

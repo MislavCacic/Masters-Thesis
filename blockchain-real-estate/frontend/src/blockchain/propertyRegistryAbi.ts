@@ -20,7 +20,7 @@ export const propertyRegistryAbi = [
 	// ==================================================
 	// PREDAJA DOKUMENTACIJE
 	// ==================================================
-	"function submitPropertyDocument(uint256 propertyId, uint8 documentType, bytes32 documentHash)",
+	"function submitPropertyDocument(uint256 propertyId, uint8 documentType, bytes32 documentHash, string documentURI)",
 
 	// ==================================================
 	// VERIFIKACIJA DOKUMENTACIJE
@@ -38,7 +38,7 @@ export const propertyRegistryAbi = [
 	// ==================================================
 	// ČITANJE DOKUMENTA
 	// ==================================================
-	"function getPropertyDocument(uint256 propertyId, uint8 documentType) view returns (tuple(bytes32 documentHash, uint8 verificationStatus, bool submitted))",
+	"function getPropertyDocument(uint256 propertyId, uint8 documentType) view returns (tuple(bytes32 documentHash, string documentURI, uint8 verificationStatus, bool submitted))",
 
 	// ==================================================
 	// ČITANJE NEKRETNINE
@@ -51,4 +51,5 @@ export const propertyRegistryAbi = [
 	// BLOCKCHAIN DOGAĐAJI
 	// ==================================================
 	"event PropertyRegistered(uint256 indexed propertyId, address indexed digitalOwner, string cadastralMunicipality, string parcelNumber)",
+	"event PropertyDocumentSubmitted(uint256 indexed propertyId, uint8 indexed documentType, bytes32 documentHash, string documentURI, address indexed submittedBy)",
 ] as const;

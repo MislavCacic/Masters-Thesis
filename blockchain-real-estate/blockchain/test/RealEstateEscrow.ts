@@ -28,6 +28,12 @@ function createDocumentHash(content: string) {
 	return keccak256(toBytes(content));
 }
 
+function createDocumentURI(content: string) {
+	const documentHash = createDocumentHash(content);
+
+	return `ipfs://test/${documentHash.slice(2)}`;
+}
+
 async function createEscrowTestContext() {
 	const [administrator, seller, buyer, verifier, unauthorizedUser] =
 		await viem.getWalletClients();
@@ -107,9 +113,10 @@ async function createEscrowTestContext() {
 		content: string,
 	): Promise<void> {
 		const documentHash = createDocumentHash(content);
+		const documentURI = createDocumentURI(content);
 
 		const transactionHash = await propertyRegistry.write.submitPropertyDocument(
-			[propertyId, documentType, documentHash],
+			[propertyId, documentType, documentHash, documentURI],
 			{
 				account: seller.account,
 			},

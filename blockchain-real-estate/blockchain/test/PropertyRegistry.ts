@@ -28,6 +28,19 @@ function createDocumentHash(content: string) {
 	return keccak256(toBytes(content));
 }
 
+/*
+ * U testovima se koristi simulirani IPFS URI.
+ *
+ * Stvarni sadržaj dokumenta nije potreban za testiranje pametnog ugovora.
+ * Bitno je provjeriti da se URI dokumenta ispravno sprema i vraća
+ * iz blockchain stanja.
+ */
+function createDocumentURI(content: string) {
+	const documentHash = createDocumentHash(content);
+
+	return `ipfs://test/${documentHash.slice(2)}`;
+}
+
 describe("PropertyRegistry", function () {
 	async function createTestContext() {
 		const [
@@ -96,10 +109,11 @@ describe("PropertyRegistry", function () {
 			content: string,
 		) {
 			const documentHash = createDocumentHash(content);
+			const documentURI = createDocumentURI(content);
 
 			const transactionHash =
 				await propertyRegistry.write.submitPropertyDocument(
-					[propertyId, documentType, documentHash],
+					[propertyId, documentType, documentHash, documentURI],
 					{
 						account: seller.account,
 					},
@@ -298,7 +312,7 @@ describe("PropertyRegistry", function () {
 		);
 	});
 
-	it("vlasnik predaje sva tri obvezna dokumenta", async function () {
+	it("vlasnik predaje sva tri obvezna dokumenta s hashom i URI adresom", async function () {
 		const { propertyRegistry, registerProperty, submitAllRequiredDocuments } =
 			await createTestContext();
 
@@ -334,6 +348,12 @@ describe("PropertyRegistry", function () {
 		console.log("\n--- PREDAJA DOKUMENTACIJE ---");
 		console.log("Svi dokumenti predani:", hasAllDocuments);
 		console.log("Svi dokumenti potvrđeni:", hasValidDocuments);
+		console.log(
+			"URI zemljišnoknjižnog izvatka:",
+			landRegistryDocument.documentURI,
+		);
+		console.log("URI katastarskog dokumenta:", cadastralDocument.documentURI);
+		console.log("URI dokaza vlasništva:", ownershipDocument.documentURI);
 		console.log("-----------------------------\n");
 
 		assert.equal(landRegistryDocument.documentHash, landRegistryHash);
@@ -341,6 +361,24 @@ describe("PropertyRegistry", function () {
 		assert.equal(cadastralDocument.documentHash, cadastralHash);
 
 		assert.equal(ownershipDocument.documentHash, ownershipHash);
+
+		assert.equal(
+			landRegistryDocument.documentURI,
+			createDocumentURI("zemljisnoknjizni izvadak"),
+			"URI zemljišnoknjižnog izvatka mora biti spremljen",
+		);
+
+		assert.equal(
+			cadastralDocument.documentURI,
+			createDocumentURI("katastarski dokument"),
+			"URI katastarskog dokumenta mora biti spremljen",
+		);
+
+		assert.equal(
+			ownershipDocument.documentURI,
+			createDocumentURI("dokaz vlasnistva"),
+			"URI dokaza vlasništva mora biti spremljen",
+		);
 
 		assert.equal(landRegistryDocument.submitted, true);
 
@@ -377,11 +415,13 @@ describe("PropertyRegistry", function () {
 
 		await registerProperty();
 
-		const documentHash = createDocumentHash("neovlasteni dokument");
+		const documentContent = "neovlasteni dokument";
+		const documentHash = createDocumentHash(documentContent);
+		const documentURI = createDocumentURI(documentContent);
 
 		await assert.rejects(async () => {
 			await propertyRegistry.write.submitPropertyDocument(
-				[1n, DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT, documentHash],
+				[1n, DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT, documentHash, documentURI],
 				{
 					account: unauthorizedUser.account,
 				},
@@ -398,6 +438,12 @@ describe("PropertyRegistry", function () {
 			false,
 			"Dokument neovlaštenog korisnika ne smije biti spremljen",
 		);
+
+		assert.equal(
+			document.documentURI,
+			"",
+			"URI neovlaštenog dokumenta ne smije biti spremljen",
+		);
 	});
 
 	it("ne dopušta predaju dokumenta s praznim hashom", async function () {
@@ -408,7 +454,12 @@ describe("PropertyRegistry", function () {
 
 		await assert.rejects(async () => {
 			await propertyRegistry.write.submitPropertyDocument(
-				[1n, DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT, zeroHash],
+				[
+					1n,
+					DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT,
+					zeroHash,
+					"ipfs://test/valid-uri",
+				],
 				{
 					account: seller.account,
 				},
@@ -421,6 +472,48 @@ describe("PropertyRegistry", function () {
 		]);
 
 		assert.equal(document.submitted, false);
+		assert.equal(document.documentURI, "");
+	});
+
+	it("ne dopušta predaju dokumenta s praznim URI-jem", async function () {
+		const { seller, propertyRegistry, registerProperty } =
+			await createTestContext();
+
+		await registerProperty();
+
+		const documentHash = createDocumentHash("dokument bez URI adrese");
+
+		await assert.rejects(async () => {
+			await propertyRegistry.write.submitPropertyDocument(
+				[1n, DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT, documentHash, ""],
+				{
+					account: seller.account,
+				},
+			);
+		});
+
+		const document = await propertyRegistry.read.getPropertyDocument([
+			1n,
+			DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT,
+		]);
+
+		assert.equal(
+			document.submitted,
+			false,
+			"Dokument bez URI-ja ne smije biti spremljen",
+		);
+
+		assert.equal(
+			document.documentHash,
+			zeroHash,
+			"Hash dokumenta ne smije biti spremljen ako URI nedostaje",
+		);
+
+		assert.equal(
+			document.documentURI,
+			"",
+			"URI mora ostati prazan nakon neuspjele transakcije",
+		);
 	});
 
 	it("ne dopušta potvrdu dokumenta koji nije predan", async function () {
@@ -600,6 +693,7 @@ describe("PropertyRegistry", function () {
 
 		console.log("\n--- ODBIJENI DOKUMENT ---");
 		console.log("Status dokumenta:", rejectedDocument.verificationStatus);
+		console.log("URI dokumenta:", rejectedDocument.documentURI);
 		console.log("Status nekretnine:", property.verificationStatus);
 		console.log("Dokumentacija valjana:", hasValidDocuments);
 		console.log("--------------------------\n");
@@ -608,6 +702,12 @@ describe("PropertyRegistry", function () {
 			rejectedDocument.verificationStatus,
 			2,
 			"Dokument mora biti Rejected",
+		);
+
+		assert.equal(
+			rejectedDocument.documentURI,
+			createDocumentURI("dokaz vlasnistva"),
+			"Odbijanje dokumenta ne smije ukloniti njegov URI",
 		);
 
 		assert.equal(
@@ -623,7 +723,7 @@ describe("PropertyRegistry", function () {
 		);
 	});
 
-	it("odbijeni dokument može se ponovno predati i zatim potvrditi", async function () {
+	it("odbijeni dokument može se ponovno predati s novim hashom i URI-jem te zatim potvrditi", async function () {
 		const {
 			seller,
 			verifier,
@@ -662,12 +762,19 @@ describe("PropertyRegistry", function () {
 			"Nekretnina mora biti Rejected nakon odbijanja dokumenta",
 		);
 
-		const correctedDocumentHash = createDocumentHash(
-			"ispravljeni dokaz vlasnistva",
-		);
+		const correctedDocumentContent = "ispravljeni dokaz vlasnistva";
+
+		const correctedDocumentHash = createDocumentHash(correctedDocumentContent);
+
+		const correctedDocumentURI = createDocumentURI(correctedDocumentContent);
 
 		const resubmitHash = await propertyRegistry.write.submitPropertyDocument(
-			[1n, DOCUMENT_TYPE.OWNERSHIP_DOCUMENT, correctedDocumentHash],
+			[
+				1n,
+				DOCUMENT_TYPE.OWNERSHIP_DOCUMENT,
+				correctedDocumentHash,
+				correctedDocumentURI,
+			],
 			{
 				account: seller.account,
 			},
@@ -685,6 +792,12 @@ describe("PropertyRegistry", function () {
 		property = await propertyRegistry.read.getProperty([1n]);
 
 		assert.equal(correctedDocument.documentHash, correctedDocumentHash);
+
+		assert.equal(
+			correctedDocument.documentURI,
+			correctedDocumentURI,
+			"Ponovno predani dokument mora spremiti novi URI",
+		);
 
 		assert.equal(
 			correctedDocument.verificationStatus,
@@ -732,21 +845,32 @@ describe("PropertyRegistry", function () {
 		await grantVerifierRole();
 		await registerProperty();
 
+		const originalContent = "originalni zemljisnoknjizni izvadak";
+
 		const originalHash = await submitDocument(
 			1n,
 			DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT,
-			"originalni zemljisnoknjizni izvadak",
+			originalContent,
 		);
+
+		const originalURI = createDocumentURI(originalContent);
 
 		await verifyDocument(1n, DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT);
 
-		const replacementHash = createDocumentHash(
-			"zamjenski zemljisnoknjizni izvadak",
-		);
+		const replacementContent = "zamjenski zemljisnoknjizni izvadak";
+
+		const replacementHash = createDocumentHash(replacementContent);
+
+		const replacementURI = createDocumentURI(replacementContent);
 
 		await assert.rejects(async () => {
 			await propertyRegistry.write.submitPropertyDocument(
-				[1n, DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT, replacementHash],
+				[
+					1n,
+					DOCUMENT_TYPE.LAND_REGISTRY_EXTRACT,
+					replacementHash,
+					replacementURI,
+				],
 				{
 					account: seller.account,
 				},
@@ -762,6 +886,12 @@ describe("PropertyRegistry", function () {
 			document.documentHash,
 			originalHash,
 			"Hash potvrđenog dokumenta ne smije se promijeniti",
+		);
+
+		assert.equal(
+			document.documentURI,
+			originalURI,
+			"URI potvrđenog dokumenta ne smije se promijeniti",
 		);
 
 		assert.equal(

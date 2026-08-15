@@ -30,6 +30,7 @@ interface PropertyDocumentData {
 	documentType: DocumentType;
 	name: string;
 	documentHash: string;
+	documentURI: string;
 	verificationStatus: number;
 	submitted: boolean;
 }
@@ -247,6 +248,8 @@ export default function VerifyPropertiesPanel({
 
 								documentHash: landRegistryDocument.documentHash as string,
 
+								documentURI: landRegistryDocument.documentURI as string,
+
 								verificationStatus: Number(
 									landRegistryDocument.verificationStatus,
 								),
@@ -261,6 +264,8 @@ export default function VerifyPropertiesPanel({
 
 								documentHash: cadastralDocument.documentHash as string,
 
+								documentURI: cadastralDocument.documentURI as string,
+
 								verificationStatus: Number(
 									cadastralDocument.verificationStatus,
 								),
@@ -274,6 +279,8 @@ export default function VerifyPropertiesPanel({
 								name: DOCUMENT_DEFINITIONS[2].name,
 
 								documentHash: ownershipDocument.documentHash as string,
+
+								documentURI: ownershipDocument.documentURI as string,
 
 								verificationStatus: Number(
 									ownershipDocument.verificationStatus,
@@ -411,8 +418,20 @@ export default function VerifyPropertiesPanel({
 
 			const statusBefore = Number(documentBefore.verificationStatus);
 
+			const documentHashBefore = documentBefore.documentHash as string;
+
+			const documentURIBefore = documentBefore.documentURI as string;
+
 			if (!submittedBefore) {
 				throw new Error("Dokument nije predan i nije ga moguće verificirati.");
+			}
+
+			if (!documentHashBefore) {
+				throw new Error("Dokument nema evidentiran blockchain hash.");
+			}
+
+			if (!documentURIBefore.trim()) {
+				throw new Error("Dokument nema evidentiranu adresu za pregled.");
 			}
 
 			if (statusBefore !== 0) {
@@ -466,6 +485,10 @@ export default function VerifyPropertiesPanel({
 				throw new Error("Potvrda blockchain transakcije nije pronađena.");
 			}
 
+			if (receipt.status !== 1) {
+				throw new Error("Blockchain transakcija nije uspješno izvršena.");
+			}
+
 			/*
 			 * Nakon MetaMask transakcije ponovno
 			 * čitamo dokument izravno s blockchaina.
@@ -487,8 +510,30 @@ export default function VerifyPropertiesPanel({
 
 			const statusAfter = Number(documentAfter.verificationStatus);
 
+			const documentHashAfter = documentAfter.documentHash as string;
+
+			const documentURIAfter = documentAfter.documentURI as string;
+
 			if (!submittedAfter) {
 				throw new Error("Blockchain više ne evidentira dokument kao predan.");
+			}
+
+			/*
+			 * Verifikacija ili odbijanje smiju promijeniti
+			 * samo status. Hash i URI moraju ostati isti.
+			 */
+			if (
+				documentHashAfter.toLowerCase() !== documentHashBefore.toLowerCase()
+			) {
+				throw new Error(
+					"Hash dokumenta neočekivano se promijenio tijekom verifikacije.",
+				);
+			}
+
+			if (documentURIAfter !== documentURIBefore) {
+				throw new Error(
+					"URI dokumenta neočekivano se promijenio tijekom verifikacije.",
+				);
 			}
 
 			const expectedStatus = action === "verify" ? 1 : 2;
@@ -547,8 +592,10 @@ export default function VerifyPropertiesPanel({
 					<h2>Registrirane nekretnine</h2>
 
 					<p>
-						Verifikator provjerava svaki obvezni dokument zasebno. Nekretnina
-						postaje spremna za prodaju tek kada su sva tri dokumenta potvrđena.
+						Verifikator može pregledati izvorni dokument putem adrese spremljene
+						na blockchainu, provjeriti njegov hash te svaki obvezni dokument
+						zasebno potvrditi ili odbiti. Nekretnina postaje spremna za prodaju
+						tek kada su sva tri dokumenta potvrđena.
 					</p>
 				</div>
 
@@ -687,13 +734,40 @@ export default function VerifyPropertiesPanel({
 											</div>
 
 											{document.submitted ? (
-												<div className="blockchain-value">
-													<span>Hash dokumenta</span>
+												<>
+													<div className="blockchain-value">
+														<span>Hash dokumenta</span>
 
-													<code title={document.documentHash}>
-														{shortenHash(document.documentHash)}
-													</code>
-												</div>
+														<code title={document.documentHash}>
+															{shortenHash(document.documentHash)}
+														</code>
+													</div>
+
+													<div className="blockchain-value">
+														<span>Adresa dokumenta</span>
+
+														<code title={document.documentURI}>
+															{document.documentURI || "Nije evidentirana"}
+														</code>
+													</div>
+
+													{document.documentURI ? (
+														<div className="verification-actions">
+															<a
+																href={document.documentURI}
+																target="_blank"
+																rel="noreferrer"
+																className="secondary-button"
+															>
+																Pregledaj dokument
+															</a>
+														</div>
+													) : (
+														<p className="error">
+															Dokument nema evidentiranu adresu za pregled.
+														</p>
+													)}
+												</>
 											) : (
 												<p className="empty-state">Dokument još nije predan.</p>
 											)}
@@ -703,7 +777,7 @@ export default function VerifyPropertiesPanel({
 													<button
 														type="button"
 														className="verify-button"
-														disabled={isAnyProcessing}
+														disabled={isAnyProcessing || !document.documentURI}
 														onClick={() =>
 															void updateDocumentVerificationStatus(
 																property.id,
@@ -719,7 +793,7 @@ export default function VerifyPropertiesPanel({
 													<button
 														type="button"
 														className="reject-button"
-														disabled={isAnyProcessing}
+														disabled={isAnyProcessing || !document.documentURI}
 														onClick={() =>
 															void updateDocumentVerificationStatus(
 																property.id,
