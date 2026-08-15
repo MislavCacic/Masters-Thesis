@@ -66,7 +66,9 @@ Sustav omogućuje:
 
 - registraciju nekretnina
 - predaju dokumentacije povezane s nekretninom
-- pohranu hash vrijednosti dokumenata na blockchainu
+- lokalnu off-chain pohranu izvornih datoteka dokumentacije
+- pohranu hash vrijednosti i URI adresa dokumenata na blockchainu
+- pregled izvorne datoteke dokumenta putem URI-ja
 - zasebnu provjeru svakog potrebnog dokumenta
 - određivanje je li nekretnina spremna za prodaju
 - pregled nekretnina u digitalnom vlasništvu korisnika
@@ -104,6 +106,9 @@ Sustav omogućuje:
 | MetaMask | Povezivanje blockchain računa i potpisivanje transakcija |
 | Vite | Razvojno i build okruženje za frontend |
 | ERC-20 MockEUR | Simulacija financijskih sredstava |
+| Node.js + Express | Lokalni off-chain servis za pohranu dokumentacije |
+| Multer | Prihvat i spremanje PDF/JPG/PNG datoteka |
+| CORS | Dopuštanje komunikacije frontenda i lokalnog document storage servisa |
 
 > **Napomena:** Hardhat nije odabrana blockchain platforma, već razvojno i testno okruženje. Odabrana blockchain platforma je **Ethereum/EVM**.
 
@@ -117,13 +122,12 @@ Osnovni tok komunikacije izgleda ovako:
 Korisnik
    ↓
 React frontend
-   ↓
-ethers.js
-   ↓
-MetaMask
-   ↓
-Ethereum JSON-RPC
-   ↓
+   ├── READ → Hardhat JSON-RPC
+   ├── WRITE → MetaMask → Hardhat lokalna EVM mreža
+   └── upload dokumenta → lokalni Document Storage Server
+                                   ↓
+                         HTTP URI dokumenta
+
 Hardhat lokalna EVM mreža
    ↓
 Solidity pametni ugovori
@@ -138,6 +142,15 @@ Operacije čitanja blockchain stanja izvode se izravno preko lokalnog Hardhat JS
 
 Operacije koje mijenjaju blockchain stanje korisnik potpisuje putem MetaMaska.
 
+Izvorne datoteke dokumentacije ne spremaju se na blockchain. Frontend ih šalje lokalnom off-chain servisu koji vraća URI dokumenta. Frontend zasebno izračunava `keccak256` hash izvorne datoteke, a `PropertyRegistry` na blockchain sprema par:
+
+```text
+documentHash
+documentURI
+```
+
+Na taj način Verifikator može otvoriti stvarni dokument, dok se blockchain hash koristi za provjeru identiteta i integriteta predane datoteke.
+
 Na taj način blockchain, a ne frontend aplikacija, predstavlja izvor istine za:
 
 ```text
@@ -151,6 +164,60 @@ uvjete kupoprodaje
 ```
 
 ---
+
+# Off-chain pohrana dokumentacije
+
+Pametni ugovor ne sprema sadržaj PDF/JPG/PNG datoteka izravno na blockchain.
+
+Razlog je što bi spremanje cijelih datoteka u blockchain stanje bilo nepraktično i skupo, a dokumenti mogu sadržavati i osjetljive podatke.
+
+Za potrebe lokalnog prototipa implementiran je jednostavan Document Storage Server:
+
+```text
+frontend/document-storage-server.mjs
+```
+
+Servis koristi:
+
+```text
+Node.js
+Express
+Multer
+CORS
+```
+
+i sprema uploadane datoteke u lokalni direktorij:
+
+```text
+frontend/document-storage/
+```
+
+Direktorij se automatski stvara i ignoriran je u Git repozitoriju.
+
+Tok predaje dokumenta:
+
+```text
+korisnik odabire datoteku
+        ↓
+frontend izračunava keccak256 hash
+        ↓
+datoteka se šalje Document Storage Serveru
+        ↓
+server sprema datoteku izvan blockchaina
+        ↓
+server vraća documentURI
+        ↓
+frontend šalje:
+documentHash + documentURI
+        ↓
+PropertyRegistry sprema oba podatka na blockchain
+```
+
+Verifikator zatim iz blockchaina čita i hash i URI te prije potvrde ili odbijanja može otvoriti stvarni dokument.
+
+Lokalni server služi isključivo za demonstraciju arhitekture off-chain pohrane u prototipu. Pametni ugovor koristi generički `documentURI`, pa nije vezan uz lokalni HTTP server. U naprednijoj implementaciji isti bi se model mogao povezati s IPFS-om, drugim decentraliziranim sustavom pohrane ili zaštićenim dokumentnim servisom.
+
+Ako se Hardhat mreža resetira, blockchain zapisi nestaju, ali lokalne datoteke u `document-storage/` mogu ostati na disku. One tada više nisu povezane s novim blockchain stanjem i po potrebi se mogu ručno obrisati.
 
 # Pametni ugovori
 
@@ -177,7 +244,26 @@ Za svaku nekretninu u prototipu definirana su tri potrebna dokumenta:
 
 Datoteke se ne pohranjuju izravno na blockchain.
 
-Frontend iz datoteka izračunava kriptografske hash vrijednosti koje se zatim pohranjuju u pametni ugovor.
+Frontend iz svake datoteke izračunava kriptografsku `keccak256` hash vrijednost. Izvorna datoteka sprema se u lokalno off-chain spremište, nakon čega frontend dobiva njezin URI.
+
+Za svaki predani dokument `PropertyRegistry` pohranjuje:
+
+```text
+documentHash
+documentURI
+verificationStatus
+submitted
+```
+
+`documentHash` omogućuje provjeru identiteta i integriteta dokumenta, dok `documentURI` omogućuje dohvat i pregled izvorne datoteke.
+
+U trenutačnoj lokalnoj demonstracijskoj implementaciji URI izgleda primjerice:
+
+```text
+http://127.0.0.1:3001/documents/<id-dokumenta>.pdf
+```
+
+Pametni ugovor nije vezan uz konkretan sustav pohrane jer koristi generički `documentURI`. U stvarnoj implementaciji isti model mogao bi upućivati na drugo off-chain spremište, uključujući decentraliziranu pohranu poput IPFS-a.
 
 Svaki dokument može imati jedan od statusa:
 
@@ -327,11 +413,14 @@ Administrator kroz svoje korisničko sučelje ne nastupa kao kupac ili prodavate
 
 Verifikator predstavlja pouzdani vanjski autoritet koji provjerava dokumentaciju.
 
-Verifikator može svaki dokument zasebno:
+Verifikator za svaki predani dokument može:
 
 ```text
-- potvrditi
-- odbiti
+- pregledati blockchain hash
+- pregledati URI dokumenta
+- otvoriti izvornu datoteku dokumenta
+- potvrditi dokument
+- odbiti dokument
 ```
 
 Blockchain samostalno ne može utvrditi je li vanjski pravni dokument valjan.
@@ -503,8 +592,18 @@ frontend/
 - komunikaciju s blockchainom putem ethers.js
 - korisnička sučelja za Administratora, Verifikatora i Korisnika
 - funkcionalnosti kupnje i prodaje za svakog običnog Korisnika
+- document-storage-server.mjs za lokalnu off-chain pohranu dokumenata
+- document-storage/ direktorij za lokalno spremljene datoteke
 - check-state.mjs skriptu za neovisnu provjeru blockchain stanja
 ```
+
+Direktorij:
+
+```text
+frontend/document-storage/
+```
+
+ignoriran je putem `.gitignore` datoteke. Uploadani testni dokumenti zato se ne spremaju u Git repozitorij.
 
 ---
 
@@ -584,7 +683,17 @@ cd ..
 
 # Pokretanje aplikacije
 
-Za rad aplikacije potrebno je koristiti **tri odvojena terminala**.
+Za potpuno pokretanje aplikacije koriste se **četiri odvojena terminala**.
+
+Tri procesa moraju ostati aktivna tijekom korištenja aplikacije:
+
+```text
+Hardhat node
+Document Storage Server
+Vite frontend
+```
+
+Deployment putem Hardhat Ignitiona izvršava se zasebno nakon pokretanja Hardhat nodea.
 
 Redoslijed pokretanja je važan.
 
@@ -646,9 +755,53 @@ Nakon uspješnog deploymenta Terminal 2 ne mora ostati aktivan.
 
 ---
 
-## Terminal 3 – pokretanje frontend aplikacije
+## Terminal 3 – pokretanje Document Storage Servera
 
 Otvoriti treći terminal.
+
+Iz root direktorija projekta:
+
+```bash
+cd frontend
+npm run dev:storage
+```
+
+Lokalni servis pokreće se na:
+
+```text
+http://127.0.0.1:3001
+```
+
+Provjera rada servisa:
+
+```text
+http://127.0.0.1:3001/health
+```
+
+Očekivani odgovor:
+
+```json
+{
+  "status": "ok",
+  "service": "real-estate-document-storage"
+}
+```
+
+Uploadani dokumenti dostupni su putem adresa oblika:
+
+```text
+http://127.0.0.1:3001/documents/<naziv-datoteke>
+```
+
+**Terminal 3 potrebno je ostaviti pokrenut tijekom cijelog korištenja funkcionalnosti dokumentacije.**
+
+Storage server prihvaća PDF, PNG, JPG i JPEG datoteke do 10 MB.
+
+---
+
+## Terminal 4 – pokretanje frontend aplikacije
+
+Otvoriti četvrti terminal.
 
 Iz root direktorija projekta:
 
@@ -662,6 +815,8 @@ Vite će prikazati lokalnu adresu aplikacije, primjerice:
 ```text
 http://localhost:5173
 ```
+
+Ako je taj port zauzet, Vite može odabrati drugi lokalni port. Document Storage Server dopušta komunikaciju s frontend aplikacijom pokrenutom na lokalnom `localhost` ili `127.0.0.1` portu.
 
 Adresu je potrebno otvoriti u pregledniku u kojem je instaliran MetaMask.
 
@@ -682,13 +837,17 @@ Kod svakog novog pokretanja sustava koristiti sljedeći redoslijed:
 
 3. Terminal 3
    cd frontend
+   npm run dev:storage
+
+4. Terminal 4
+   cd frontend
    npm run dev
 
-4. Otvoriti frontend u pregledniku
+5. Otvoriti frontend u pregledniku
 
-5. Povezati MetaMask s Hardhat Local mrežom
+6. Povezati MetaMask s Hardhat Local mrežom
 
-6. Odabrati odgovarajući blockchain račun
+7. Odabrati odgovarajući blockchain račun
 ```
 
 > **Važno:** Ponovnim pokretanjem Hardhat nodea od početka resetira se lokalno blockchain stanje. Nakon novog pokretanja nodea potrebno je ponovno izvršiti deployment pametnih ugovora prije korištenja frontend aplikacije.
@@ -809,7 +968,7 @@ Registracija
 
 Unijeti podatke nove nekretnine i odabrati sva tri potrebna dokumenta.
 
-Potrebni dokumenti:
+Dokumenti korišteni u prototipu:
 
 ```text
 1. Zemljišnoknjižni izvadak
@@ -817,7 +976,18 @@ Potrebni dokumenti:
 3. Dokaz / osnova vlasništva
 ```
 
+Za svaki dokument frontend:
+
+```text
+1. izračunava keccak256 hash datoteke
+2. šalje izvornu datoteku Document Storage Serveru
+3. prima documentURI
+4. šalje documentHash + documentURI u PropertyRegistry
+```
+
 Korisnik zatim potvrđuje potrebne blockchain transakcije u MetaMasku.
+
+Ako je registracija nekretnine već uspješno zapisana na blockchain, ali predaja dokumenata bude prekinuta, frontend pamti ID te nekretnine tijekom aktualne sesije i omogućuje nastavak predaje bez ponovne registracije iste nekretnine.
 
 Povezani blockchain račun postaje početni:
 
@@ -869,6 +1039,25 @@ Verifikacija
 ```
 
 Za registriranu nekretninu trebaju biti prikazana tri dokumenta.
+
+Za svaki predani dokument prikazuju se:
+
+```text
+status dokumenta
+documentHash
+documentURI
+Pregledaj dokument
+Potvrdi dokument
+Odbij dokument
+```
+
+Prije potvrde ili odbijanja Verifikator može kliknuti:
+
+```text
+Pregledaj dokument
+```
+
+i otvoriti izvornu PDF/JPG/PNG datoteku putem URI-ja evidentiranog na blockchainu.
 
 Dokumente potvrđivati jedan po jedan.
 
@@ -1321,7 +1510,7 @@ npx hardhat test
 Trenutna verzija projekta sadrži:
 
 ```text
-43 passing
+44 passing
 ```
 
 Testovima su obuhvaćeni pozitivni i negativni scenariji, uključujući:
@@ -1329,7 +1518,12 @@ Testovima su obuhvaćeni pozitivni i negativni scenariji, uključujući:
 ```text
 - dodjelu blockchain uloga
 - registraciju nekretnine
-- predaju dokumentacije
+- predaju dokumentacije s hashom i URI adresom
+- provjeru spremanja i čitanja documentURI vrijednosti
+- zabranu predaje dokumenta s praznim URI-jem
+- očuvanje URI-ja nakon odbijanja i verifikacije
+- ponovnu predaju odbijenog dokumenta s novim hashom i URI-jem
+- zabranu zamjene već potvrđenog dokumenta
 - provjeru praznih i nepostojećih dokumenata
 - pojedinačnu verifikaciju dokumenata
 - odbijanje dokumenta
@@ -1359,7 +1553,7 @@ Testovima su obuhvaćeni pozitivni i negativni scenariji, uključujući:
 Posljednja provjera:
 
 ```text
-43 / 43 passing
+44 / 44 passing
 ```
 
 ---
@@ -1499,17 +1693,84 @@ Kompletni ručni E2E multi-user scenarij uspješno je testiran.
 33. Aktualni digitalOwner pravilno se prikazuje nakon nove prodaje ✅
 
 34. Frontend radi bez aplikacijskih runtime grešaka               ✅
+
+35. Izvorne datoteke spremaju se u off-chain document storage      ✅
+
+36. Blockchain sprema documentHash i documentURI                   ✅
+
+37. Verifikator vidi hash i URI svakog dokumenta                   ✅
+
+38. Verifikator može otvoriti stvarni uploadani dokument           ✅
+
+39. Dokument ostaje dostupan za pregled i nakon verifikacije       ✅
+
+40. Potvrda dokumenta ne mijenja njegov hash ni URI                ✅
 ```
 
 Uz ručni E2E test:
 
 ```text
 Hardhat testovi:
-43 / 43 passing
+44 / 44 passing
 
 Frontend production build:
 uspješan
 ```
+
+---
+
+# Testirani E2E scenarij s pregledom stvarnih dokumenata
+
+Nakon uvođenja `documentURI` podrške proveden je novi ručni E2E scenarij koji je obuhvatio cijeli tok od uploada dokumentacije do završene kupoprodaje.
+
+Testirano je:
+
+```text
+1. Korisnik registrira novu nekretninu
+2. Odabire tri stvarne JPG datoteke
+3. Document Storage Server sprema datoteke izvan blockchaina
+4. Frontend izračunava hash svake datoteke
+5. PropertyRegistry sprema documentHash + documentURI
+6. Verifikator vidi hash i URI svakog dokumenta
+7. Verifikator otvara stvarnu uploadanu datoteku
+8. Verifikator potvrđuje dokumente jedan po jedan
+9. Nakon 3/3 potvrđenih dokumenata nekretnina postaje spremna za prodaju
+10. Korisnik kreira prodaju
+11. Drugi Korisnik odobrava MockEUR sredstva escrow ugovoru
+12. readyForPurchase postaje true
+13. Kupnja se automatski izvršava
+14. MockEUR sredstva prelaze prodavatelju
+15. digitalOwner prelazi na kupca
+16. Dokumenti, njihovi hashovi i URI-jevi ostaju dostupni nakon kupoprodaje
+```
+
+U testiranom primjeru prodajna cijena iznosila je:
+
+```text
+120000 mEUR
+```
+
+Kupac je prije kupnje imao:
+
+```text
+200000 mEUR
+```
+
+a nakon kupnje:
+
+```text
+80000 mEUR
+```
+
+Prodavatelj je primio:
+
+```text
+120000 mEUR
+```
+
+Nakon izvršenja kupoprodaje blockchain stanje pokazalo je da je kupac novi `digitalOwner`, prodaja ima status `Completed`, a potvrđena dokumentacija i dalje ostaje vezana uz nekretninu.
+
+Ovim scenarijem dodatno je potvrđeno da se pregled izvornih dokumenata koristi samo kao off-chain dio procesa, dok odluke o statusu dokumentacije, dopuštenju prodaje i prijenosu digitalnog vlasništva ostaju evidentirane i kontrolirane pametnim ugovorima.
 
 ---
 
@@ -1531,7 +1792,11 @@ Prema postojećem pravnom sustavu Republike Hrvatske, stvarno pravo vlasništva 
 
 Pametni ugovor također ne može samostalno utvrditi pravnu valjanost PDF dokumenta ili drugog podatka koji postoji izvan blockchain mreže.
 
+`documentHash` omogućuje provjeru integriteta i identiteta sadržaja, ali sam po sebi ne dokazuje pravnu valjanost dokumenta. `documentURI` predstavlja samo adresu s koje se dokument može dohvatiti.
+
 Zbog toga je u prototipu uvedena uloga Verifikatora koja predstavlja pouzdani vanjski izvor informacija.
+
+Trenutačna implementacija koristi lokalni off-chain Document Storage Server i testnu dokumentaciju. U stvarnom sustavu dokumenti vezani uz nekretnine mogu sadržavati osobne i druge osjetljive podatke, pa bi bilo potrebno primijeniti odgovarajuću autentikaciju, autorizaciju, enkripciju i kontrolu pristupa. Na javnom blockchainu i sam URI zapisan u pametnom ugovoru treba promatrati kao javno čitljiv podatak.
 
 Za eventualnu stvarnu primjenu ovakvog sustava bilo bi potrebno riješiti pitanja poput:
 
@@ -1544,6 +1809,9 @@ Za eventualnu stvarnu primjenu ovakvog sustava bilo bi potrebno riješiti pitanj
 - pouzdane provjere vanjskih podataka
 - zaštite osobnih podataka
 - privatnosti dokumentacije
+- sigurne off-chain pohrane dokumenata
+- enkripcije i kontrole pristupa dokumentaciji
+- dostupnosti i trajnosti URI resursa
 - upravljanja blockchain ključevima
 - regulatornih zahtjeva
 ```
@@ -1559,9 +1827,13 @@ Implementirani multi-user prototip demonstrira cjelokupni simulirani proces kupo
 ```text
 Korisnik registrira nekretninu
         ↓
-predaje dokumentaciju
+odabire dokumentaciju
         ↓
-Verifikator provjerava dokumentaciju
+izvorne datoteke spremaju se off-chain
+        ↓
+hash + URI zapisuju se na blockchain
+        ↓
+Verifikator otvara i provjerava dokumentaciju
         ↓
 Korisnik kao Prodavatelj kreira prodaju
         ↓
