@@ -17,6 +17,39 @@ Na kraju rada potrebno je prikazati primjer simulirane transakcije i analizirati
 
 ---
 
+# Verzija `buyer-seller`
+
+Ova grana predstavlja verziju prototipa u kojoj su Kupac i Prodavatelj unaprijed definirani kao zasebni demonstracijski profili.
+
+Koriste se četiri osnovna profila:
+
+```text
+Administrator
+Prodavatelj
+Kupac
+Verifikator
+```
+
+U ovoj verziji obični korisnički računi nisu implementirani kao dinamički multi-user profil.
+
+Prodavatelj i Kupac imaju zasebna korisnička sučelja i unaprijed definirane demonstracijske uloge.
+
+Grana:
+
+```text
+buyer-seller
+```
+
+ujedno je zadana grana repozitorija.
+
+Alternativna implementacija s dinamičkim multi-user modelom dostupna je na zasebnoj grani:
+
+```text
+multi-user
+```
+
+---
+
 # Opis implementiranog prototipa
 
 Razvijen je prototip decentralizirane aplikacije za kupoprodaju nekretnina temeljen na **Ethereum/EVM platformi**.
@@ -431,7 +464,7 @@ ako su zadovoljeni i svi ostali uvjeti.
 
 # Uloge u sustavu
 
-Prototip razlikuje četiri demonstracijske uloge:
+Verzija `buyer-seller` razlikuje četiri demonstracijska profila:
 
 ```text
 Administrator
@@ -439,6 +472,8 @@ Prodavatelj
 Kupac
 Verifikator
 ```
+
+Profili Prodavatelj i Kupac u ovoj su verziji unaprijed definirani i predstavljaju zasebne korisničke poglede.
 
 ---
 
@@ -587,6 +622,42 @@ koristi se za lokalne uploadane datoteke i ignoriran je putem `.gitignore` datot
 
 ---
 
+# Git grane
+
+Repozitorij sadrži dvije glavne verzije aplikacije:
+
+```text
+buyer-seller
+multi-user
+```
+
+## `buyer-seller`
+
+Zadana grana repozitorija.
+
+Koristi unaprijed definirane profile:
+
+```text
+Administrator
+Prodavatelj
+Kupac
+Verifikator
+```
+
+Prodavatelj i Kupac predstavljaju zasebne demonstracijske korisničke profile.
+
+## `multi-user`
+
+Alternativna verzija sustava u kojoj obični blockchain račun ima profil:
+
+```text
+Korisnik
+```
+
+a uloga Kupca ili Prodavatelja proizlazi iz konkretne transakcije.
+
+---
+
 # Pokretanje projekta
 
 ## Preduvjeti
@@ -609,16 +680,28 @@ git clone https://github.com/MislavCacic/Masters-Thesis.git blockchain-real-esta
 cd blockchain-real-estate
 ```
 
-Glavna verzija aplikacije s unaprijed definiranim demonstracijskim ulogama nalazi se na grani:
+Zadana verzija repozitorija nalazi se na grani:
 
 ```text
-main
+buyer-seller
 ```
 
-Prebacivanje na `main`:
+Ako je potrebno eksplicitno se prebaciti na nju:
 
 ```bash
-git checkout main
+git checkout buyer-seller
+```
+
+Provjera aktivne grane:
+
+```bash
+git branch
+```
+
+Očekivano:
+
+```text
+* buyer-seller
 ```
 
 ---
@@ -881,7 +964,7 @@ npx hardhat node
 
 Hardhat automatski generira lokalne testne račune i u terminalu prikazuje njihove adrese i privatne ključeve.
 
-Za ovaj prototip koriste se prva četiri Hardhat računa:
+Za `buyer-seller` verziju koriste se prva četiri Hardhat računa:
 
 ```text
 Account #0 → Administrator
@@ -1764,7 +1847,7 @@ Blockchain se stoga u ovom prototipu promatra kao tehnologija koja može automat
 
 # Sažetak
 
-Implementirani prototip demonstrira cjelokupni simulirani proces kupoprodaje nekretnine:
+Implementirani `buyer-seller` prototip demonstrira cjelokupni simulirani proces kupoprodaje nekretnine:
 
 ```text
 Prodavatelj registrira nekretninu
@@ -1838,6 +1921,16 @@ Blockchain se koristi za:
 ```
 
 dok se stvarne datoteke dokumentacije pohranjuju izvan blockchaina.
+
+Glavna karakteristika `buyer-seller` verzije jest unaprijed definirana podjela demonstracijskih korisničkih profila na:
+
+```text
+Prodavatelja
+i
+Kupca
+```
+
+Prodavatelj upravlja registracijom nekretnine, dokumentacijom i prodajom, dok Kupac upravlja financijskim uvjetima i kupnjom nekretnine.
 
 Cilj prototipa je pokazati mogućnost korištenja Ethereum blockchain tehnologije i pametnih ugovora za automatizaciju kupoprodajnog procesa kada su svi unaprijed definirani uvjeti zadovoljeni.
 
