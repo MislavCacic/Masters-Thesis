@@ -183,6 +183,48 @@ async function createReadRegistry(): Promise<Contract> {
 	);
 }
 
+/*
+ * Pronalazi već registriranu nekretninu prema istoj kombinaciji
+ * koju PropertyRegistry koristi za jedinstvenost:
+ *
+ * katastarska općina + broj katastarske čestice.
+ *
+ * Ovo omogućuje nastavak djelomično dovršene predaje
+ * dokumentacije čak i nakon refresha frontend aplikacije.
+ */
+async function findExistingPropertyId(
+	propertyRegistryRead: Contract,
+	cadastralMunicipality: string,
+	parcelNumber: string,
+): Promise<bigint | null> {
+	const propertyCount =
+		(await propertyRegistryRead.getPropertyCount()) as bigint;
+
+	for (let propertyId = 1n; propertyId <= propertyCount; propertyId++) {
+		const property = await propertyRegistryRead.getProperty(propertyId);
+
+		const exists = property.exists as boolean;
+
+		if (!exists) {
+			continue;
+		}
+
+		const storedCadastralMunicipality =
+			property.cadastralMunicipality as string;
+
+		const storedParcelNumber = property.parcelNumber as string;
+
+		if (
+			storedCadastralMunicipality === cadastralMunicipality &&
+			storedParcelNumber === parcelNumber
+		) {
+			return propertyId;
+		}
+	}
+
+	return null;
+}
+
 export default function RegisterPropertyForm({
 	account,
 }: RegisterPropertyFormProps) {
@@ -422,10 +464,16 @@ export default function RegisterPropertyForm({
 			return;
 		}
 
+		const normalizedCadastralMunicipality = cadastralMunicipality.trim();
+
+		const normalizedParcelNumber = parcelNumber.trim();
+
+		const normalizedPropertyAddress = propertyAddress.trim();
+
 		if (
-			!cadastralMunicipality.trim() ||
-			!parcelNumber.trim() ||
-			!propertyAddress.trim()
+			!normalizedCadastralMunicipality ||
+			!normalizedParcelNumber ||
+			!normalizedPropertyAddress
 		) {
 			setErrorMessage("Sva tekstualna polja moraju biti unesena.");
 
@@ -510,7 +558,62 @@ export default function RegisterPropertyForm({
 			);
 
 			/* =============================================
-			   4. REGISTRACIJA NEKRETNINE
+			   4. PRONALAZAK POSTOJEĆE NEKRETNINE
+			   ============================================= */
+
+			/*
+			 * pendingPropertyId postoji dok frontend nije refreshan.
+			 *
+			 * Ako je stranica refreshana, React state se izgubi.
+			 * Zato prije nove registracije provjeravamo blockchain
+			 * i tražimo postoji li već ista katastarska općina +
+			 * broj čestice.
+			 */
+			if (createdPropertyId === null) {
+				setStatusMessage(
+					"Provjerava se postoji li nekretnina već na blockchainu...",
+				);
+
+				const existingPropertyId = await findExistingPropertyId(
+					propertyRegistryRead,
+					normalizedCadastralMunicipality,
+					normalizedParcelNumber,
+				);
+
+				if (existingPropertyId !== null) {
+					const existingProperty =
+						await propertyRegistryRead.getProperty(existingPropertyId);
+
+					const existingOwner = existingProperty.digitalOwner as string;
+
+					const existingAddress = existingProperty.propertyAddress as string;
+
+					if (existingOwner.toLowerCase() !== account.toLowerCase()) {
+						throw new Error(
+							`Nekretnina s katastarskom općinom "${normalizedCadastralMunicipality}" i česticom "${normalizedParcelNumber}" već je registrirana i pripada drugom digitalnom vlasniku.`,
+						);
+					}
+
+					if (existingAddress !== normalizedPropertyAddress) {
+						throw new Error(
+							`Nekretnina je već registrirana kao ID ${existingPropertyId.toString()}, ali blockchain adresa nekretnine glasi "${existingAddress}". Za nastavak predaje dokumenata unesi istu adresu.`,
+						);
+					}
+
+					createdPropertyId = existingPropertyId;
+
+					setPendingPropertyId(existingPropertyId);
+
+					setRegisteredPropertyId(existingPropertyId.toString());
+
+					setStatusMessage(
+						`Pronađena je postojeća nekretnina ID ${existingPropertyId.toString()}. Nastavlja se predaja dokumenata koji nedostaju...`,
+					);
+				}
+			}
+
+			/* =============================================
+			   5. REGISTRACIJA NOVE NEKRETNINE
 			   ============================================= */
 
 			if (createdPropertyId === null) {
@@ -518,9 +621,9 @@ export default function RegisterPropertyForm({
 
 				const registrationTransaction =
 					await propertyRegistryWrite.registerProperty(
-						cadastralMunicipality.trim(),
-						parcelNumber.trim(),
-						propertyAddress.trim(),
+						normalizedCadastralMunicipality,
+						normalizedParcelNumber,
+						normalizedPropertyAddress,
 					);
 
 				setRegistrationTransactionHash(registrationTransaction.hash);
@@ -578,6 +681,11 @@ export default function RegisterPropertyForm({
 					);
 				}
 			} else {
+				/*
+				 * Ako je nekretnina pronađena preko pendingPropertyId
+				 * ili blockchain pretrage, dodatno provjeravamo da
+				 * i dalje postoji i da je povezani račun vlasnik.
+				 */
 				setRegisteredPropertyId(createdPropertyId.toString());
 
 				const existingProperty =
@@ -599,7 +707,7 @@ export default function RegisterPropertyForm({
 			}
 
 			/* =============================================
-			   5. PREDAJA 3 OBVEZNA DOKUMENTA
+			   6. PREDAJA 3 OBVEZNA DOKUMENTA
 			   ============================================= */
 
 			const landRegistryExtractURI = await submitDocumentIfNeeded(
@@ -642,7 +750,7 @@ export default function RegisterPropertyForm({
 			);
 
 			/* =============================================
-			   6. KONAČNA BLOCKCHAIN PROVJERA
+			   7. KONAČNA BLOCKCHAIN PROVJERA
 			   ============================================= */
 
 			setStatusMessage(
@@ -736,7 +844,7 @@ export default function RegisterPropertyForm({
 			const finalVerificationStatus = Number(finalProperty.verificationStatus);
 
 			/* =============================================
-			   7. USPJEH
+			   8. USPJEH
 			   ============================================= */
 
 			setStatusMessage("");

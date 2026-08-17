@@ -241,13 +241,13 @@ contract PropertyRegistry is AccessControl {
      * Sadržaj dokumenta ne sprema se izravno na blockchain.
      *
      * Na blockchain se sprema:
-     * - kriptografski hash dokumenta
-     * - URI dokumenta pohranjenog izvan blockchaina
+     *  kriptografski hash dokumenta
+     *  URI dokumenta pohranjenog izvan blockchaina
      *
-     * Dokument može predati samo trenutačni digitalni vlasnik.
+     * Dokument može predati samo trenutni digitalni vlasnik.
      *
      * Odbijeni dokument moguće je ponovno predati.
-     * Već potvrđeni dokument nije moguće zamijeniti.
+     * Već potvrđeni dokument nije moguće mijenjati.
      *
      * @param propertyId ID nekretnine.
      * @param documentType Vrsta dokumenta.
@@ -277,7 +277,7 @@ contract PropertyRegistry is AccessControl {
 
         require(
             document.verificationStatus != VerificationStatus.Verified,
-            "Potvrdeni dokument nije moguce zamijeniti"
+            "Potvrdeni dokument nije moguce mijenjati"
         );
 
         document.documentHash = documentHash;
@@ -462,7 +462,7 @@ contract PropertyRegistry is AccessControl {
      * predani i potvrđeni.
      *
      * Funkciju može pozvati samo adresa s TRANSFER_ROLE ulogom.
-     * U stvarnom toku prototipa tu ulogu ima escrow pametni ugovor.
+     * U stvarnom toku prototipa tu ulogu ima RealEstateEscrow pametni ugovor.
      *
      * @param propertyId Jedinstveni identifikator nekretnine.
      * @param newOwner Adresa novog digitalnog vlasnika.
@@ -535,9 +535,9 @@ contract PropertyRegistry is AccessControl {
      * @dev Automatski određuje ukupni status dokumentacije nekretnine.
      *
      * Pravila:
-     * - ako je barem jedan predani dokument odbijen -> Rejected
-     * - ako sva obvezna dokumenta postoje i potvrđena su -> Verified
-     * - u svim ostalim slučajevima -> Pending
+     *  ako je barem jedan predani dokument odbijen -> Rejected
+     *  ako sva obvezna dokumenta postoje i potvrđena su -> Verified
+     *  u svim ostalim slučajevima -> Pending
      */
     function _refreshPropertyVerificationStatus(uint256 propertyId) private {
         VerificationStatus previousStatus = properties[propertyId]

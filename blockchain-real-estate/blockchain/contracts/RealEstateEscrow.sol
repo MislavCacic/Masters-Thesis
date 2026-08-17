@@ -152,10 +152,10 @@ contract RealEstateEscrow is ReentrancyGuard {
      * @notice Kreira novu ponudu za prodaju nekretnine.
      *
      * Prodaja se može kreirati samo ako:
-     * - cijena je veća od nule
-     * - dokumentacija nekretnine je valjana
-     * - pozivatelj je trenutačni digitalni vlasnik
-     * - nekretnina nema drugu aktivnu prodaju
+     *  cijena je veća od nule
+     *  dokumentacija nekretnine je valjana
+     *  pozivatelj je trenutačni digitalni vlasnik
+     *  nekretnina nema drugu aktivnu prodaju
      *
      * @param propertyId Jedinstveni identifikator nekretnine.
      * @param price Prodajna cijena u najmanjim jedinicama mEUR tokena.
