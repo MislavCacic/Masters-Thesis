@@ -132,7 +132,7 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 
 		try {
 			/*
-			 * Sve READ operacije čitamo izravno
+			 * Sve READ operacije se čitaju izravno
 			 * s lokalnog Hardhat RPC-a.
 			 *
 			 * Za njih MetaMask nije potreban.
@@ -209,10 +209,6 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 				 * 2 = Completed
 				 * 3 = Cancelled
 				 *
-				 * Funded je kod našeg ugovora
-				 * samo prijelazni status unutar
-				 * iste transakcije.
-				 *
 				 * Kupcu prikazujemo samo Created.
 				 */
 				const isCreated = status === 0;
@@ -227,9 +223,6 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 				const propertyId = sale.propertyId as bigint;
 
 				/*
-				 * Ovdje se vidi ključna stvar
-				 * za diplomski:
-				 *
 				 * frontend NE računa sam
 				 * uvjete kupoprodaje.
 				 *
@@ -286,7 +279,7 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 			}
 
 			/*
-			 * Novije prodaje prikazujemo prve.
+			 * Novije prodaje se prikazuju prve.
 			 */
 			loadedSales.sort((a, b) => {
 				if (a.id === b.id) {
@@ -322,7 +315,7 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 
 	useEffect(() => {
 		/*
-		 * Odmah čistimo podatke prethodnog
+		 * Odmah se čiste podaci prethodnog
 		 * MetaMask računa.
 		 */
 		setSales([]);
@@ -345,7 +338,7 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 
 		return () => {
 			/*
-			 * Invalidiramo eventualni stari
+			 * Invalidira se eventualni stari
 			 * READ zahtjev.
 			 */
 			requestIdRef.current++;
@@ -361,7 +354,7 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 		}
 
 		/*
-		 * MetaMask koristimo samo za WRITE
+		 * MetaMask se koristi samo za WRITE
 		 * transakcije koje korisnik mora potpisati.
 		 */
 		const provider = new BrowserProvider(window.ethereum);
@@ -442,7 +435,7 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 			);
 
 			/*
-			 * Sada ponovno čitamo stanje
+			 * Sada se ponovno čita stanje
 			 * direktno s Hardhat RPC-a.
 			 *
 			 * getPurchaseConditions()
@@ -469,7 +462,7 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 		try {
 			/*
 			 * Neposredno prije WRITE transakcije
-			 * ponovno pitamo smart contract jesu li
+			 * ponovno se pita smart contract jesu li
 			 * svi uvjeti još uvijek zadovoljeni.
 			 *
 			 * Čitanje ide direktno preko Hardhat RPC-a.
@@ -535,7 +528,7 @@ export default function PurchaseSalePanel({ account }: PurchaseSalePanelProps) {
 
 			/*
 			 * Nakon potvrđene transakcije konačno
-			 * stanje NE čitamo preko MetaMaska,
+			 * stanje se NE čitam preko MetaMaska,
 			 * nego direktno s Hardhat nodea.
 			 */
 			const postTransactionProvider = new JsonRpcProvider(LOCAL_RPC_URL);

@@ -102,10 +102,10 @@ export default function App() {
 	/*
 	 * Učitavanje blockchain podataka povezanog računa.
 	 *
-	 * BrowserProvider koristimo samo kako bismo
-	 * provjerili na kojoj je mreži MetaMask.
+	 * BrowserProvider se koristi samo kako bi se
+	 * provjerilo na kojoj je mreži MetaMask.
 	 *
-	 * Posebne blockchain uloge čitamo izravno
+	 * Posebne blockchain uloge se čitaju izravno
 	 * s lokalnog Hardhat JSON-RPC nodea.
 	 *
 	 * Administrator i Verifikator imaju posebne
@@ -113,7 +113,7 @@ export default function App() {
 	 *
 	 * Svaki ostali MetaMask račun tretira se kao
 	 * obični Korisnik koji može istovremeno
-	 * sudjelovati kao kupac i prodavatelj.
+	 * sudjelovati kao Kupac i Prodavatelj.
 	 */
 	const loadAccountData = useCallback(
 		async (
@@ -122,9 +122,7 @@ export default function App() {
 		): Promise<void> => {
 			const requestId = ++accountRequestIdRef.current;
 
-			/* =========================================
-			   1. PROVJERA METAMASK MREŽE
-			   ========================================= */
+			/* PROVJERA METAMASK MREŽE */
 
 			const walletNetwork = await browserProvider.getNetwork();
 
@@ -141,9 +139,7 @@ export default function App() {
 				throw new Error("Prebaci MetaMask na mrežu Hardhat local.");
 			}
 
-			/* =========================================
-			   2. DIREKTNO ČITANJE HARDHAT STANJA
-			   ========================================= */
+			/* DIREKTNO ČITANJE HARDHAT STANJA */
 
 			const readProvider = new JsonRpcProvider(LOCAL_RPC_URL);
 
@@ -173,7 +169,7 @@ export default function App() {
 			 * vlasništva.
 			 *
 			 * Za određivanje frontend profila zato
-			 * provjeravamo samo Administratora
+			 * se provjerava samo Administratora
 			 * i Verifikatora.
 			 */
 			const [adminRole, verifierRole] = await Promise.all([
@@ -243,7 +239,7 @@ export default function App() {
 		accountRequestIdRef.current++;
 
 		/*
-		 * Novi račun spremamo odmah kako child
+		 * Novi račun se sprema odmah kako child
 		 * komponente ne bi dobivale adresu
 		 * prethodnog korisnika.
 		 */
@@ -261,7 +257,7 @@ export default function App() {
 
 		/*
 		 * Kod promjene računa uvijek se
-		 * vraćamo na početni pregled.
+		 * vraća na početni pregled.
 		 */
 		setActiveSection("overview");
 	}, []);
@@ -398,7 +394,7 @@ export default function App() {
 
 		return () => {
 			/*
-			 * Invalidiramo eventualni zahtjev koji
+			 * Invalidira se eventualni zahtjev koji
 			 * još traje tijekom unmounta ili
 			 * React StrictMode remounta.
 			 */
@@ -422,13 +418,6 @@ export default function App() {
 	 * Administrator
 	 * Verifikator
 	 * Korisnik
-	 *
-	 * Kupac i Prodavatelj više nisu trajni
-	 * profili vezani uz unaprijed definirane
-	 * Ethereum adrese.
-	 *
-	 * Obični Korisnik može obavljati obje vrste
-	 * aktivnosti ovisno o konkretnoj transakciji.
 	 */
 	const applicationProfile = isAdmin
 		? "Administrator"

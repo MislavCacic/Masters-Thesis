@@ -14,10 +14,6 @@
 		inset 0 1px 0 rgb(255 255 255 / 2%);
 }
 
-/* =========================
-   ZAGLAVLJE
-   ========================= */
-
 .active-sales-header {
 	display: flex;
 	align-items: flex-start;
@@ -49,28 +45,13 @@
 	line-height: 1.6;
 }
 
-/* =========================
-   GUMB OSVJEŽI
-
-   Koristi zajednički .secondary-button
-   stil iz shared.css.
-   ========================= */
-
 .active-sales-header .secondary-button {
 	flex-shrink: 0;
 }
 
-/* =========================
-   DETALJI AKTIVNE PRODAJE
-   ========================= */
-
 .active-sale-details {
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-
-/* =========================
-   GUMB ZA OTKAZIVANJE
-   ========================= */
 
 .cancel-sale-button {
 	width: 100%;
@@ -140,10 +121,6 @@
 	box-shadow: none;
 }
 
-/* =========================
-   ADMINISTRATORSKA NAPOMENA
-   ========================= */
-
 .admin-view-note {
 	margin: 20px 0 0;
 	padding: 14px 16px;
@@ -158,10 +135,6 @@
 	line-height: 1.5;
 	text-align: center;
 }
-
-/* =========================
-   KARTICE AKTIVNIH PRODAJA
-   ========================= */
 
 .active-sales-card .property-item {
 	transition:
@@ -183,10 +156,7 @@
 		0 0 0 1px rgb(124 92 190 / 5%);
 }
 
-/* =========================
-   TABLET
-   ========================= */
-
+/* TABLET */
 @media (max-width: 900px) {
 	.active-sales-card {
 		padding: 28px;
@@ -201,10 +171,7 @@
 	}
 }
 
-/* =========================
-   MOBITEL
-   ========================= */
-
+/* MOBITEL */
 @media (max-width: 600px) {
 	.active-sales-card {
 		padding: 22px 18px;

@@ -96,8 +96,8 @@ export default function DashboardStats({
 			 * READ operacije idu izravno na lokalni
 			 * Hardhat JSON-RPC node.
 			 *
-			 * MetaMask nam za ovo nije potreban jer
-			 * ne potpisujemo nikakvu transakciju.
+			 * MetaMask za ovo nije potreban jer se
+			 * ne potpisuje nikakva transakcija.
 			 */
 			const provider = new JsonRpcProvider(LOCAL_RPC_URL);
 
@@ -295,8 +295,8 @@ export default function DashboardStats({
 					 * samo aktivne prodaje drugih
 					 * korisnika.
 					 *
-					 * Vlastitu nekretninu ne prikazujemo
-					 * kao dostupnu kupnju.
+					 * Vlastita nekretnina se ne prikazuje
+					 * kao dostupnu za kupnju.
 					 */
 					if (!isCurrentSeller) {
 						userAvailableSales++;

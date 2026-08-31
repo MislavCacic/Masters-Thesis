@@ -194,7 +194,7 @@ export default function TransactionHistoryPanel({
 			}
 
 			/*
-			 * Najnovije prodaje prikazujemo prve.
+			 * Najnovije prodaje se prikazuju prve.
 			 */
 			loadedSales.sort((a, b) => {
 				if (a.id === b.id) {
@@ -221,7 +221,7 @@ export default function TransactionHistoryPanel({
 
 	useEffect(() => {
 		/*
-		 * Kod promjene računa odmah uklanjamo povijest
+		 * Kod promjene računa odmah se uklanja povijest
 		 * prethodno povezanog računa.
 		 */
 		setSales([]);

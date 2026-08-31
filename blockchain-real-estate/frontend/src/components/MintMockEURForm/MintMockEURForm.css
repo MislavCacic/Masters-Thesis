@@ -14,10 +14,6 @@
 		inset 0 1px 0 rgb(255 255 255 / 2%);
 }
 
-/* =========================
-   ZAGLAVLJE
-   ========================= */
-
 .mint-header {
 	display: flex;
 	align-items: flex-start;
@@ -49,17 +45,9 @@
 	line-height: 1.6;
 }
 
-/* =========================
-   FORMA
-   ========================= */
-
 .mint-form {
 	margin-top: 26px;
 }
-
-/* =========================
-   INPUT POLJA
-   ========================= */
 
 .mint-card .form-field input,
 .mint-card .form-field select {
@@ -82,10 +70,6 @@
 
 	box-shadow: 0 0 0 3px rgb(139 92 246 / 14%);
 }
-
-/* =========================
-   GUMB ZA DODJELU
-   ========================= */
 
 .mint-card form > button {
 	width: 100%;
@@ -154,19 +138,11 @@
 	box-shadow: none;
 }
 
-/* =========================
-   REZULTAT TRANSAKCIJE
-   ========================= */
-
 .mint-card .transaction-result {
 	transition:
 		border-color 0.2s ease,
 		background 0.2s ease;
 }
-
-/* =========================
-   HASH TRANSAKCIJE
-   ========================= */
 
 .mint-card .blockchain-value {
 	transition:
@@ -188,10 +164,7 @@
 		0 0 0 1px rgb(139 92 246 / 5%);
 }
 
-/* =========================
-   TABLET
-   ========================= */
-
+/* TABLET */
 @media (max-width: 900px) {
 	.mint-card {
 		padding: 28px;
@@ -202,10 +175,7 @@
 	}
 }
 
-/* =========================
-   MOBITEL
-   ========================= */
-
+/* MOBITEL */
 @media (max-width: 600px) {
 	.mint-card {
 		padding: 22px 18px;

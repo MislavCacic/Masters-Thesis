@@ -14,9 +14,6 @@ import {IPropertyRegistry} from "./interfaces/IPropertyRegistry.sol";
  * Ugovor provjerava jesu li zadovoljeni uvjeti kupoprodaje,
  * zaprima sredstva kupca i automatski izvršava prijenos
  * digitalnog vlasništva i sredstava prodavatelju.
- *
- * Digitalni prijenos vlasništva ne predstavlja stvarni
- * zemljišnoknjižni upis u Republici Hrvatskoj.
  */
 contract RealEstateEscrow is ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -275,8 +272,8 @@ contract RealEstateEscrow is ReentrancyGuard {
         );
 
         /**
-         * Ako smo došli do ove točke,
-         * svi uvjeti moraju biti zadovoljeni.
+         * Ako je došlo do ove točke,
+         * znači da su svi uvjeti zadovoljeni.
          */
         require(
             conditions.readyForPurchase,
@@ -298,7 +295,6 @@ contract RealEstateEscrow is ReentrancyGuard {
 
         /**
          * Nema ručnog posrednika koji završava kupoprodaju.
-         *
          * Smart contract odmah i automatski izvršava
          * završetak kupoprodaje.
          */
@@ -354,9 +350,6 @@ contract RealEstateEscrow is ReentrancyGuard {
     /**
      * @dev Interna funkcija koja centralno provjerava
      * sve uvjete potrebne za izvršenje kupoprodaje.
-     *
-     * Ova funkcija predstavlja jedinstveni izvor istine
-     * za provjeru preduvjeta kupoprodaje.
      */
     function _getPurchaseConditions(
         uint256 saleId,
@@ -428,8 +421,6 @@ contract RealEstateEscrow is ReentrancyGuard {
         conditions.buyerHasSufficientAllowance = buyerAllowance >= sale.price;
 
         /**
-         * Konačna odluka.
-         *
          * Kupoprodaja je spremna za izvršenje
          * samo ako su SVI uvjeti zadovoljeni.
          */

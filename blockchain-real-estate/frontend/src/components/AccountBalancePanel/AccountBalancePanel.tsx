@@ -86,8 +86,8 @@ export default function AccountBalancePanel({
 			 * READ operacija ide izravno na
 			 * lokalni Hardhat JSON-RPC node.
 			 *
-			 * MetaMask nije potreban jer ovdje
-			 * ne potpisujemo transakciju.
+			 * MetaMask nije potreban jer se ovdje
+			 * ne potpisuje transakcija.
 			 */
 			const provider = new JsonRpcProvider(LOCAL_RPC_URL);
 
@@ -141,7 +141,7 @@ export default function AccountBalancePanel({
 
 	useEffect(() => {
 		/*
-		 * Kod promjene računa odmah uklanjamo
+		 * Kod promjene računa odmah se uklanja
 		 * prikaz prethodnog salda.
 		 */
 		setBalance(0n);
@@ -151,7 +151,7 @@ export default function AccountBalancePanel({
 
 		return () => {
 			/*
-			 * Invalidiramo eventualni stari zahtjev
+			 * Invalidira se eventualni stari zahtjev
 			 * koji još traje.
 			 */
 			requestIdRef.current++;

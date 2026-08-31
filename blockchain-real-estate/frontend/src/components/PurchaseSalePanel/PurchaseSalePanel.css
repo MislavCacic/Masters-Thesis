@@ -14,10 +14,6 @@
 		inset 0 1px 0 rgb(255 255 255 / 2%);
 }
 
-/* =========================
-   ZAGLAVLJE
-   ========================= */
-
 .purchase-header {
 	display: flex;
 	align-items: flex-start;
@@ -49,20 +45,9 @@
 	line-height: 1.6;
 }
 
-/* =========================
-   GUMB OSVJEŽI
-
-   Koristi zajednički .secondary-button
-   stil iz shared.css.
-   ========================= */
-
 .purchase-header .secondary-button {
 	flex-shrink: 0;
 }
-
-/* =========================
-   STANJE TOKENA
-   ========================= */
 
 .token-summary {
 	display: grid;
@@ -125,10 +110,6 @@
 	overflow-wrap: anywhere;
 }
 
-/* =========================
-   CIJENA PRODAJE
-   ========================= */
-
 .sale-price {
 	display: inline-flex;
 	align-items: center;
@@ -147,10 +128,6 @@
 	white-space: nowrap;
 }
 
-/* =========================
-   AKCIJE KUPNJE
-   ========================= */
-
 .purchase-actions {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -158,13 +135,6 @@
 
 	margin-top: 20px;
 }
-
-/* =========================
-   ODOBRI SREDSTVA
-
-   Pripremna akcija - namjerno
-   nešto mirnija od kupnje.
-   ========================= */
 
 .approve-button {
 	width: 100%;
@@ -222,14 +192,6 @@
 	outline: 2px solid #a78bfa;
 	outline-offset: 3px;
 }
-
-/* =========================
-   KUPI NEKRETNINU
-
-   Glavna akcija kupca.
-   Vizualno je nešto izraženija
-   od odobravanja sredstava.
-   ========================= */
 
 .purchase-button {
 	width: 100%;
@@ -289,10 +251,6 @@
 	outline-offset: 3px;
 }
 
-/* =========================
-   DISABLED GUMBI
-   ========================= */
-
 .approve-button:disabled,
 .purchase-button:disabled {
 	cursor: not-allowed;
@@ -303,10 +261,6 @@
 
 	box-shadow: none;
 }
-
-/* =========================
-   UPOZORENJE
-   ========================= */
 
 .purchase-warning {
 	margin: 18px 0 0;
@@ -321,10 +275,6 @@
 	font-size: 13px;
 	line-height: 1.5;
 }
-
-/* =========================
-   KARTICE PRODAJE
-   ========================= */
 
 .purchase-card .property-item {
 	transition:
@@ -346,10 +296,7 @@
 		0 0 0 1px rgb(139 92 246 / 5%);
 }
 
-/* =========================
-   TABLET
-   ========================= */
-
+/* TABLET */
 @media (max-width: 900px) {
 	.purchase-card {
 		padding: 28px;
@@ -360,10 +307,7 @@
 	}
 }
 
-/* =========================
-   MOBITEL
-   ========================= */
-
+/* MOBITEL */
 @media (max-width: 600px) {
 	.purchase-card {
 		padding: 22px 18px;

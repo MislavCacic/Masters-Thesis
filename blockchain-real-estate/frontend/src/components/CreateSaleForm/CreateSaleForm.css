@@ -14,10 +14,6 @@
 		inset 0 1px 0 rgb(255 255 255 / 2%);
 }
 
-/* =========================
-   ZAGLAVLJE
-   ========================= */
-
 .sale-header {
 	display: flex;
 	align-items: flex-start;
@@ -49,17 +45,9 @@
 	line-height: 1.6;
 }
 
-/* =========================
-   FORMA
-   ========================= */
-
 .sale-form {
 	margin-top: 26px;
 }
-
-/* =========================
-   SELECT / INPUT HOVER
-   ========================= */
 
 .sale-card .form-field input,
 .sale-card .form-field select {
@@ -82,10 +70,6 @@
 
 	box-shadow: 0 0 0 3px rgb(139 92 246 / 14%);
 }
-
-/* =========================
-   GLAVNI GUMB
-   ========================= */
 
 .sale-card form > button {
 	border: 1px solid #74425f;
@@ -150,10 +134,7 @@
 	box-shadow: none;
 }
 
-/* =========================
-   TABLET
-   ========================= */
-
+/* TABLET */
 @media (max-width: 900px) {
 	.sale-card {
 		padding: 28px;
@@ -164,10 +145,7 @@
 	}
 }
 
-/* =========================
-   MOBITEL
-   ========================= */
-
+/* MOBITEL */
 @media (max-width: 600px) {
 	.sale-card {
 		padding: 22px 18px;

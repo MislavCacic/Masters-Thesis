@@ -169,7 +169,7 @@ export default function PropertyPanel({
 		try {
 			/*
 			 * PropertyPanel samo čita blockchain.
-			 * Zato koristimo direktni Hardhat RPC
+			 * Zato se koristi direktni Hardhat RPC
 			 * umjesto MetaMask BrowserProvidera.
 			 */
 			const provider = new JsonRpcProvider(LOCAL_RPC_URL);
@@ -335,7 +335,7 @@ export default function PropertyPanel({
 
 	useEffect(() => {
 		/*
-		 * Kod promjene računa odmah uklanjamo
+		 * Kod promjene računa odmah se uklanjaju
 		 * nekretnine prethodnog korisnika.
 		 */
 		setProperties([]);

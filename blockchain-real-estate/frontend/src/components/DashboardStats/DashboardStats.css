@@ -14,10 +14,6 @@
 		inset 0 1px 0 rgb(255 255 255 / 2%);
 }
 
-/* =========================
-   ZAGLAVLJE
-   ========================= */
-
 .dashboard-stats-header {
 	display: flex;
 	align-items: center;
@@ -48,10 +44,6 @@
 	font-size: 23px;
 	line-height: 1.2;
 }
-
-/* =========================
-   GUMB OSVJEŽI
-   ========================= */
 
 .dashboard-stats-refresh {
 	width: auto;
@@ -119,10 +111,6 @@
 	box-shadow: none;
 }
 
-/* =========================
-   STATISTIKE
-   ========================= */
-
 .dashboard-stats-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -163,10 +151,6 @@
 		box-shadow 0.22s ease;
 }
 
-/* =========================
-   HOVER STATISTIKE
-   ========================= */
-
 .dashboard-stat-card:hover {
 	border-color: #5b4a70;
 
@@ -194,10 +178,6 @@
 	line-height: 1;
 }
 
-/* =========================
-   GREŠKA
-   ========================= */
-
 .dashboard-stats-error {
 	margin: 20px 0 0;
 	padding: 14px 16px;
@@ -214,10 +194,7 @@
 	overflow-wrap: anywhere;
 }
 
-/* =========================
-   TABLET
-   ========================= */
-
+/* TABLET */
 @media (max-width: 900px) {
 	.dashboard-stats {
 		padding: 28px;
@@ -228,10 +205,7 @@
 	}
 }
 
-/* =========================
-   MOBITEL
-   ========================= */
-
+/* MOBITEL */
 @media (max-width: 600px) {
 	.dashboard-stats {
 		padding: 22px 18px;

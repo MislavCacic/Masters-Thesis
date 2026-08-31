@@ -6,10 +6,6 @@
 	margin: 0;
 }
 
-/* =========================
-   GLAVNI PANEL
-   ========================= */
-
 .dashboard-overview-card {
 	width: 100%;
 	box-sizing: border-box;
@@ -25,10 +21,6 @@
 		0 20px 50px rgb(0 0 0 / 20%),
 		inset 0 1px 0 rgb(255 255 255 / 2%);
 }
-
-/* =========================
-   NASLOV
-   ========================= */
 
 .dashboard-overview-eyebrow {
 	margin: 0 0 10px;
@@ -58,10 +50,6 @@
 	font-size: 15px;
 	line-height: 1.6;
 }
-
-/* =========================
-   BRZE AKCIJE
-   ========================= */
 
 .dashboard-overview-actions {
 	display: grid;
@@ -109,10 +97,6 @@
 		box-shadow 0.22s ease;
 }
 
-/* =========================
-   HOVER BRZE AKCIJE
-   ========================= */
-
 .dashboard-overview-action:hover:not(:disabled) {
 	border-color: #8a4f78;
 
@@ -136,10 +120,6 @@
 	color: #e7ddf3;
 }
 
-/* =========================
-   KLIK
-   ========================= */
-
 .dashboard-overview-action:active:not(:disabled) {
 	transform: translateY(0) scale(0.99);
 
@@ -148,18 +128,10 @@
 		inset 0 1px 3px rgb(0 0 0 / 14%);
 }
 
-/* =========================
-   FOCUS
-   ========================= */
-
 .dashboard-overview-action:focus-visible {
 	outline: 2px solid #a78bfa;
 	outline-offset: 3px;
 }
-
-/* =========================
-   TEKST UNUTAR AKCIJE
-   ========================= */
 
 .dashboard-overview-action strong {
 	color: #f8fafc;
@@ -181,10 +153,7 @@
 	transition: color 0.2s ease;
 }
 
-/* =========================
-   TABLET
-   ========================= */
-
+/* TABLET */
 @media (max-width: 900px) {
 	.dashboard-overview-card {
 		padding: 28px;
@@ -195,10 +164,7 @@
 	}
 }
 
-/* =========================
-   MOBITEL
-   ========================= */
-
+/* MOBITEL */
 @media (max-width: 600px) {
 	.dashboard-overview {
 		gap: 16px;

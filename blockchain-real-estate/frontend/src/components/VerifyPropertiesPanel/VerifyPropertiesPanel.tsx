@@ -180,7 +180,7 @@ export default function VerifyPropertiesPanel({
 		try {
 			/*
 			 * READ operacije ne ovise o MetaMasku.
-			 * Čitamo izravno s lokalnog Hardhat nodea.
+			 * Čita se izravno s lokalnog Hardhat nodea.
 			 */
 			const provider = new JsonRpcProvider(LOCAL_RPC_URL);
 
@@ -385,7 +385,7 @@ export default function VerifyPropertiesPanel({
 			}
 
 			/*
-			 * Prije WRITE transakcije provjeravamo
+			 * Prije WRITE transakcije provjerava se
 			 * aktualno stanje dokumenta direktno
 			 * s Hardhat nodea.
 			 */
@@ -490,8 +490,8 @@ export default function VerifyPropertiesPanel({
 			}
 
 			/*
-			 * Nakon MetaMask transakcije ponovno
-			 * čitamo dokument izravno s blockchaina.
+			 * Nakon MetaMask transakcije se ponovno
+			 * čita dokument izravno s blockchaina.
 			 */
 			const postTransactionProvider = new JsonRpcProvider(LOCAL_RPC_URL);
 

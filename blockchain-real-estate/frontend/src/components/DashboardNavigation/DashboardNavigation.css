@@ -23,10 +23,6 @@
 	flex-wrap: nowrap;
 }
 
-/* ==================================================
-   NAVIGACIJSKI GUMB
-   ================================================== */
-
 .dashboard-navigation-item {
 	flex: 0 0 auto;
 
@@ -63,10 +59,6 @@
 		box-shadow 0.22s ease;
 }
 
-/* ==================================================
-   HOVER
-   ================================================== */
-
 .dashboard-navigation-item:hover:not(:disabled) {
 	border-color: #8a4f78;
 
@@ -82,10 +74,6 @@
 		0 0 0 1px rgb(168 85 247 / 7%);
 }
 
-/* ==================================================
-   AKTIVAN
-   ================================================== */
-
 .dashboard-navigation-item.active {
 	border-color: #91516f;
 
@@ -98,10 +86,6 @@
 		0 5px 15px rgb(124 58 237 / 10%),
 		inset 0 1px 0 rgb(255 255 255 / 5%);
 }
-
-/* ==================================================
-   ACTIVE HOVER
-   ================================================== */
 
 .dashboard-navigation-item.active:hover:not(:disabled) {
 	border-color: #a65c83;
@@ -118,18 +102,10 @@
 		0 0 0 1px rgb(168 85 247 / 9%);
 }
 
-/* ==================================================
-   FOCUS
-   ================================================== */
-
 .dashboard-navigation-item:focus-visible {
 	outline: 2px solid #a78bfa;
 	outline-offset: 3px;
 }
-
-/* ==================================================
-   KLIK
-   ================================================== */
 
 .dashboard-navigation-item:active:not(:disabled) {
 	transform: translateY(0) scale(0.97);
@@ -138,10 +114,6 @@
 		0 4px 10px rgb(0 0 0 / 14%),
 		inset 0 1px 3px rgb(0 0 0 / 14%);
 }
-
-/* ==================================================
-   DISABLED
-   ================================================== */
 
 .dashboard-navigation-item:disabled {
 	cursor: not-allowed;
@@ -153,10 +125,7 @@
 	box-shadow: none;
 }
 
-/* ==================================================
-   TABLET
-   ================================================== */
-
+/* TABLET */
 @media (max-width: 900px) {
 	.dashboard-navigation {
 		width: 100%;
@@ -177,10 +146,7 @@
 	}
 }
 
-/* ==================================================
-   MOBITEL
-   ================================================== */
-
+/* MOBITEL */
 @media (max-width: 600px) {
 	.dashboard-navigation-items {
 		display: grid;
@@ -201,10 +167,7 @@
 	}
 }
 
-/* ==================================================
-   JAKO MALI MOBITEL
-   ================================================== */
-
+/* JAKO MALI MOBITEL */
 @media (max-width: 420px) {
 	.dashboard-navigation-items {
 		grid-template-columns: 1fr;

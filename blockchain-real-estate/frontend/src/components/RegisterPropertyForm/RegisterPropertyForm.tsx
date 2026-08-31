@@ -309,11 +309,11 @@ export default function RegisterPropertyForm({
 		uriKey: DocumentURIKey,
 	): Promise<string> {
 		/*
-		 * Prije uploada provjeravamo postoji li dokument
+		 * Prije uploada se provjerava postoji li dokument
 		 * već na blockchainu.
 		 *
 		 * Time kod nastavka djelomično završene registracije
-		 * ne uploadamo istu datoteku ponovno bez potrebe.
+		 * se ne uploada ista datoteka ponovno bez potrebe.
 		 */
 		const existingDocument = await propertyRegistryRead.getPropertyDocument(
 			propertyId,
@@ -364,7 +364,7 @@ export default function RegisterPropertyForm({
 		}));
 
 		/*
-		 * Nakon uspješnog uploada blockchainu šaljemo
+		 * Nakon uspješnog uploada blockchainu šalje se
 		 * i hash i URI dokumenta.
 		 */
 		setStatusMessage(
@@ -402,7 +402,7 @@ export default function RegisterPropertyForm({
 		}
 
 		/*
-		 * Stvarno blockchain stanje ponovno čitamo
+		 * Stvarno blockchain stanje se ponovno čita
 		 * direktno s lokalnog Hardhat nodea.
 		 */
 		const submittedDocument = await propertyRegistryRead.getPropertyDocument(
@@ -565,8 +565,8 @@ export default function RegisterPropertyForm({
 			 * pendingPropertyId postoji dok frontend nije refreshan.
 			 *
 			 * Ako je stranica refreshana, React state se izgubi.
-			 * Zato prije nove registracije provjeravamo blockchain
-			 * i tražimo postoji li već ista katastarska općina +
+			 * Zato prije nove registracije se provjeravaju podaci u blockchainu
+			 * i traži se postoji li već ista katastarska općina +
 			 * broj čestice.
 			 */
 			if (createdPropertyId === null) {
@@ -683,7 +683,7 @@ export default function RegisterPropertyForm({
 			} else {
 				/*
 				 * Ako je nekretnina pronađena preko pendingPropertyId
-				 * ili blockchain pretrage, dodatno provjeravamo da
+				 * ili blockchain pretrage, dodatno se provjerava da
 				 * i dalje postoji i da je povezani račun vlasnik.
 				 */
 				setRegisteredPropertyId(createdPropertyId.toString());

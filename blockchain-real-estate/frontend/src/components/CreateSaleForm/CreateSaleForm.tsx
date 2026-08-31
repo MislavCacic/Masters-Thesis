@@ -144,7 +144,7 @@ export default function CreateSaleForm({ account }: CreateSaleFormProps) {
 			}
 
 			/*
-			 * Prvo određujemo koje nekretnine
+			 * Prvo se određuje koje nekretnine
 			 * već imaju aktivnu prodaju.
 			 */
 			const propertiesWithActiveSale = new Set<string>();
@@ -170,7 +170,7 @@ export default function CreateSaleForm({ account }: CreateSaleFormProps) {
 				 * 2 = Completed
 				 * 3 = Cancelled
 				 *
-				 * Funded je u našem escrow ugovoru
+				 * Funded je u escrow ugovoru
 				 * samo prijelazni status unutar iste
 				 * blockchain transakcije.
 				 */
@@ -367,7 +367,7 @@ export default function CreateSaleForm({ account }: CreateSaleFormProps) {
 
 			/*
 			 * Neposredno prije MetaMask WRITE transakcije
-			 * još jednom čitamo aktualno blockchain stanje
+			 * još jednom se čita aktualno blockchain stanje
 			 * izravno s Hardhat nodea.
 			 */
 			const readProvider = new JsonRpcProvider(LOCAL_RPC_URL);
@@ -412,7 +412,7 @@ export default function CreateSaleForm({ account }: CreateSaleFormProps) {
 			}
 
 			/*
-			 * MetaMask koristimo samo za WRITE
+			 * MetaMask se koristi samo za WRITE
 			 * operaciju koju prodavatelj mora potpisati.
 			 */
 			const browserProvider = new BrowserProvider(window.ethereum);
@@ -434,8 +434,8 @@ export default function CreateSaleForm({ account }: CreateSaleFormProps) {
 			setStatusMessage("Potvrdi kreiranje prodaje u MetaMasku...");
 
 			/*
-			 * Iako smo na frontendu provjerili
-			 * dokumentaciju i vlasništvo,
+			 * Iako se na frontendu provjerava
+			 * dokumentacija i vlasništvo,
 			 * RealEstateEscrow.createSale()
 			 * ponovno provjerava uvjete.
 			 *
@@ -460,8 +460,8 @@ export default function CreateSaleForm({ account }: CreateSaleFormProps) {
 			}
 
 			/*
-			 * Nakon potvrde transakcije ponovno
-			 * čitamo stanje izravno s Hardhat nodea,
+			 * Nakon potvrde transakcije ponovno se
+			 * čita stanje izravno s Hardhat nodea,
 			 * a ne preko MetaMask providera.
 			 */
 			const postTransactionProvider = new JsonRpcProvider(LOCAL_RPC_URL);
@@ -494,7 +494,7 @@ export default function CreateSaleForm({ account }: CreateSaleFormProps) {
 			const createdExists = createdSale.exists as boolean;
 
 			/*
-			 * Provjeravamo da blockchain zapis
+			 * Provjerava se da blockchain zapis
 			 * stvarno odgovara prodaji koju je
 			 * korisnik upravo kreirao.
 			 */

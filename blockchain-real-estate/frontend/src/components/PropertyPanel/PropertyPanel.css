@@ -14,10 +14,6 @@
 		inset 0 1px 0 rgb(255 255 255 / 2%);
 }
 
-/* =========================
-   ZAGLAVLJE
-   ========================= */
-
 .portfolio-header {
 	display: flex;
 	align-items: flex-start;
@@ -48,10 +44,6 @@
 	font-size: 15px;
 	line-height: 1.6;
 }
-
-/* =========================
-   GUMB OSVJEŽI
-   ========================= */
 
 .portfolio-header .secondary-button {
 	width: auto;
@@ -116,10 +108,6 @@
 	box-shadow: none;
 }
 
-/* =========================
-   KARTICE NEKRETNINA
-   ========================= */
-
 .portfolio-card .property-item {
 	transition:
 		border-color 0.22s ease,
@@ -139,10 +127,6 @@
 		0 12px 28px rgb(0 0 0 / 16%),
 		0 0 0 1px rgb(139 92 246 / 5%);
 }
-
-/* =========================
-   STATUS BADGE
-   ========================= */
 
 .portfolio-card .status-pending {
 	border: 1px solid rgb(245 158 11 / 40%);
@@ -165,10 +149,6 @@
 	color: #fca5a5;
 }
 
-/* =========================
-   HASH DOKUMENTACIJE
-   ========================= */
-
 .portfolio-card .blockchain-value {
 	transition:
 		border-color 0.2s ease,
@@ -189,10 +169,7 @@
 		0 0 0 1px rgb(139 92 246 / 5%);
 }
 
-/* =========================
-   TABLET
-   ========================= */
-
+/* TABLET */
 @media (max-width: 900px) {
 	.portfolio-card {
 		padding: 28px;
@@ -203,10 +180,7 @@
 	}
 }
 
-/* =========================
-   MOBITEL
-   ========================= */
-
+/* MOBITEL */
 @media (max-width: 600px) {
 	.portfolio-card {
 		padding: 22px 18px;

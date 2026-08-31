@@ -15,10 +15,6 @@
 		inset 0 1px 0 rgb(255 255 255 / 2%);
 }
 
-/* =========================
-   NASLOV
-   ========================= */
-
 .balance-card h2 {
 	margin: 0;
 
@@ -36,10 +32,6 @@
 	font-size: 15px;
 	line-height: 1.6;
 }
-
-/* =========================
-   PODACI O RAČUNU
-   ========================= */
 
 .balance-summary {
 	display: grid;
@@ -100,10 +92,6 @@
 	overflow-wrap: anywhere;
 }
 
-/* =========================
-   RASPOLOŽIVO STANJE
-   ========================= */
-
 .balance-summary .balance-amount {
 	grid-column: 1 / -1;
 
@@ -134,10 +122,6 @@
 	font-size: 30px;
 	line-height: 1.2;
 }
-
-/* =========================
-   GUMB ZA OSVJEŽAVANJE
-   ========================= */
 
 .balance-refresh {
 	width: 100%;
@@ -201,10 +185,6 @@
 	box-shadow: none;
 }
 
-/* =========================
-   NAPOMENA
-   ========================= */
-
 .balance-note {
 	margin: 14px 0 0;
 
@@ -215,20 +195,14 @@
 	text-align: center;
 }
 
-/* =========================
-   TABLET
-   ========================= */
-
+/* TABLET */
 @media (max-width: 900px) {
 	.balance-card {
 		padding: 28px;
 	}
 }
 
-/* =========================
-   MOBITEL
-   ========================= */
-
+/* MOBITEL */
 @media (max-width: 600px) {
 	.balance-card {
 		padding: 22px 18px;

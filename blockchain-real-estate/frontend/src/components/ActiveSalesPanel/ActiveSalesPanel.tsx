@@ -109,7 +109,7 @@ export default function ActiveSalesPanel({
 			/*
 			 * Ovo su samo READ operacije.
 			 *
-			 * Čitamo izravno s lokalnog Hardhat RPC-a,
+			 * Čita se izravno s lokalnog Hardhat RPC-a,
 			 * ne preko MetaMask BrowserProvidera.
 			 */
 			const provider = new JsonRpcProvider(LOCAL_RPC_URL);
@@ -209,7 +209,7 @@ export default function ActiveSalesPanel({
 			}
 
 			/*
-			 * Najnovije aktivne prodaje prikazujemo prve.
+			 * Najnovije aktivne prodaje se prikazuju prve.
 			 */
 			loadedSales.sort((a, b) => {
 				if (a.id === b.id) {
@@ -246,7 +246,7 @@ export default function ActiveSalesPanel({
 
 		return () => {
 			/*
-			 * Invalidiramo read zahtjev prethodnog računa
+			 * Invalidira se read zahtjev prethodnog računa
 			 * ako još nije završio.
 			 */
 			requestIdRef.current++;
@@ -273,7 +273,7 @@ export default function ActiveSalesPanel({
 			/*
 			 * WRITE operacija:
 			 *
-			 * ovdje nam MetaMask treba jer prodavatelj
+			 * ovdje je potreban MetaMask jer prodavatelj
 			 * mora potpisati cancelSale transakciju.
 			 */
 			const walletProvider = new BrowserProvider(window.ethereum);
@@ -309,8 +309,8 @@ export default function ActiveSalesPanel({
 			}
 
 			/*
-			 * Nakon potvrđene WRITE transakcije stanje ponovno
-			 * provjeravamo direktno preko Hardhat RPC-a.
+			 * Nakon potvrđene WRITE transakcije stanje se ponovno
+			 * provjerava direktno preko Hardhat RPC-a.
 			 */
 			const readProvider = new JsonRpcProvider(LOCAL_RPC_URL);
 

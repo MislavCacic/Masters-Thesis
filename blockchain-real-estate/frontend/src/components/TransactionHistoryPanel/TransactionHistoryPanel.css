@@ -14,10 +14,6 @@
 		inset 0 1px 0 rgb(255 255 255 / 2%);
 }
 
-/* =========================
-   ZAGLAVLJE
-   ========================= */
-
 .history-header {
 	display: flex;
 	align-items: flex-start;
@@ -48,10 +44,6 @@
 	font-size: 15px;
 	line-height: 1.6;
 }
-
-/* =========================
-   GUMB OSVJEŽI
-   ========================= */
 
 .history-header .secondary-button {
 	width: auto;
@@ -116,17 +108,9 @@
 	box-shadow: none;
 }
 
-/* =========================
-   DETALJI POVIJESTI
-   ========================= */
-
 .history-details {
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-
-/* =========================
-   KARTICE TRANSAKCIJA
-   ========================= */
 
 .history-card .property-item {
 	transition:
@@ -148,10 +132,6 @@
 		0 0 0 1px rgb(139 92 246 / 5%);
 }
 
-/* =========================
-   STATUS VLASNIŠTVA
-   ========================= */
-
 .ownership-confirmation,
 .ownership-warning,
 .ownership-cancellation {
@@ -170,10 +150,6 @@
 		box-shadow 0.22s ease;
 }
 
-/* =========================
-   USPJEŠNO PRENESENO
-   ========================= */
-
 .ownership-confirmation {
 	border: 1px solid rgb(34 197 94 / 45%);
 
@@ -190,10 +166,6 @@
 
 	box-shadow: 0 8px 20px rgb(20 83 45 / 16%);
 }
-
-/* =========================
-   NEOČEKIVANO STANJE
-   ========================= */
 
 .ownership-warning {
 	border: 1px solid rgb(239 68 68 / 45%);
@@ -212,10 +184,6 @@
 	box-shadow: 0 8px 20px rgb(127 29 29 / 16%);
 }
 
-/* =========================
-   OTKAZANA PRODAJA
-   ========================= */
-
 .ownership-cancellation {
 	border: 1px solid rgb(245 158 11 / 45%);
 
@@ -232,10 +200,6 @@
 
 	box-shadow: 0 8px 20px rgb(120 53 15 / 14%);
 }
-
-/* =========================
-   TEKST STATUSA
-   ========================= */
 
 .ownership-confirmation span,
 .ownership-warning span,
@@ -262,10 +226,7 @@
 	line-height: 1.5;
 }
 
-/* =========================
-   TABLET
-   ========================= */
-
+/* TABLET */
 @media (max-width: 900px) {
 	.history-card {
 		padding: 28px;
@@ -280,10 +241,7 @@
 	}
 }
 
-/* =========================
-   MOBITEL
-   ========================= */
-
+/* MOBITEL */
 @media (max-width: 600px) {
 	.history-card {
 		padding: 22px 18px;

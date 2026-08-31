@@ -14,10 +14,6 @@
 		inset 0 1px 0 rgb(255 255 255 / 2%);
 }
 
-/* =========================
-   ZAGLAVLJE
-   ========================= */
-
 .verification-header {
 	display: flex;
 	align-items: flex-start;
@@ -48,10 +44,6 @@
 	font-size: 15px;
 	line-height: 1.6;
 }
-
-/* =========================
-   GUMB OSVJEŽI
-   ========================= */
 
 .verification-header .secondary-button {
 	width: auto;
@@ -107,10 +99,6 @@
 	outline-offset: 3px;
 }
 
-/* =========================
-   KARTICE NEKRETNINA
-   ========================= */
-
 .verification-card .property-item {
 	transition:
 		border-color 0.22s ease,
@@ -131,10 +119,6 @@
 		0 0 0 1px rgb(139 92 246 / 5%);
 }
 
-/* =========================
-   AKCIJE VERIFIKACIJE
-   ========================= */
-
 .verification-actions {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -142,10 +126,6 @@
 
 	margin-top: 20px;
 }
-
-/* =========================
-   POTVRDI DOKUMENT
-   ========================= */
 
 .verify-button {
 	width: 100%;
@@ -204,10 +184,6 @@
 	outline-offset: 3px;
 }
 
-/* =========================
-   ODBIJ DOKUMENT
-   ========================= */
-
 .reject-button {
 	width: 100%;
 
@@ -265,10 +241,6 @@
 	outline-offset: 3px;
 }
 
-/* =========================
-   DISABLED
-   ========================= */
-
 .verify-button:disabled,
 .reject-button:disabled,
 .verification-header .secondary-button:disabled {
@@ -280,10 +252,6 @@
 
 	box-shadow: none;
 }
-
-/* =========================
-   STATUSI
-   ========================= */
 
 .verification-card .status-pending {
 	border: 1px solid rgb(245 158 11 / 40%);
@@ -306,10 +274,6 @@
 	color: #fca5a5;
 }
 
-/* =========================
-   BLOCKCHAIN PODACI
-   ========================= */
-
 .verification-card .blockchain-value {
 	transition:
 		border-color 0.2s ease,
@@ -330,10 +294,7 @@
 		0 0 0 1px rgb(139 92 246 / 5%);
 }
 
-/* =========================
-   TABLET
-   ========================= */
-
+/* TABLET */
 @media (max-width: 900px) {
 	.verification-card {
 		padding: 28px;
@@ -344,10 +305,7 @@
 	}
 }
 
-/* =========================
-   MOBITEL
-   ========================= */
-
+/* MOBITEL */
 @media (max-width: 600px) {
 	.verification-card {
 		padding: 22px 18px;

@@ -7,9 +7,6 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
  * @title PropertyRegistry
  * @notice Blockchain registar nekretnina, pripadajuće dokumentacije
  * i digitalnih vlasnika.
- *
- * Ovaj pametni ugovor predstavlja prototip i ne zamjenjuje
- * službeni upis vlasništva u zemljišne knjige Republike Hrvatske.
  */
 contract PropertyRegistry is AccessControl {
     bytes32 public constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
@@ -31,10 +28,6 @@ contract PropertyRegistry is AccessControl {
 
     /**
      * @notice Vrste dokumenata koje su obvezne prije prodaje nekretnine.
-     *
-     * Popis predstavlja prototip sustava.
-     * Konačna interpretacija dokumentacije obrađuje se
-     * u pravnom dijelu diplomskog rada.
      */
     enum DocumentType {
         LandRegistryExtract,
